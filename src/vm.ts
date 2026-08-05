@@ -38,22 +38,38 @@ function collection(items: CollectionItem[]): Collection {
   return freeze(assign(items, KIND_COLLECTION));
 }
 
+function totalWeight(d: Die | Collection): number {
+  return d.reduce((acc, [, count]) => acc + count, 0);
+}
+
 type ProgramValue = number | Sequence | Die | Collection;
+
+function checkResult(value: number) {
+  if (value > Number.MAX_SAFE_INTEGER || value < Number.MIN_SAFE_INTEGER) {
+    throw new Error(`Math overflow: ${value} is outside the safe integer range`);
+  }
+  return value;
+}
 
 function numberOperation(op: number, a: number, b: number): number {
   switch (op) {
     case OPCODE.ADD:
-      return a + b;
+      return checkResult(a + b);
     case OPCODE.SUBTRACT:
-      return a - b;
+      return checkResult(a - b);
     case OPCODE.MULTIPLY:
-      return a * b;
+      return checkResult(a * b);
     case OPCODE.DIVIDE:
-      return Math.floor(a / b);
+      return checkResult(Math.floor(a / b));
     case OPCODE.EXPONENT:
-      return Math.pow(a, b);
+      if (b < 0) {
+        throw new Error("Negative exponent not supported");
+      }
+      return checkResult(Math.pow(a, b));
     case OPCODE.EQUAL:
       return a === b ? 1 : 0;
+    case OPCODE.NOT_EQUAL:
+      return a !== b ? 1 : 0;
     case OPCODE.LESS_THAN:
       return a < b ? 1 : 0;
     case OPCODE.GREATER_THAN:
@@ -214,19 +230,37 @@ function dNumberDie(n: number, d: Die): Collection {
     }
     const combinedCount = product(counts);
     seq.sort((a, b) => b - a); // Sequences within collections are always in descending order
-    collectionMapAdd(result, sequence(seq), combinedCount);
+    collectionMapAdd(result, sequence([...seq]), combinedCount);
     seq.length = 0;
     counts.length = 0;
   }
   return collection(collectionMapFinish(result));
 }
 
+function gcd(a: number, b: number): number {
+  while (b !== 0) {
+    const temp = b;
+    b = a % b;
+    a = temp;
+  }
+  return a;
+}
+
+function lcm(values: number[]): number {
+  return values.reduce((acc, val) => (acc * val) / gcd(acc, val), 1);
+}
+
 function dDieDie(n: Die, d: Die): Collection {
   const result = collectionMap();
-  for (const [value, count] of n) {
+  const allPermuted = n.map(([value, count]) => {
     const permuted = dNumberDie(value, d);
+    return [value, count, permuted, totalWeight(permuted)] as const;
+  });
+  const totalCollectionWeight = lcm(allPermuted.map(([, , , weight]) => weight));
+
+  for (const [, count, permuted, weight] of allPermuted) {
     for (const [seq, permCount] of permuted) {
-      const combinedCount = count * permCount;
+      const combinedCount = count * permCount * (totalCollectionWeight / weight);
       // No need to sort here because dNumberDie already sorts sequences
       collectionMapAdd(result, seq, combinedCount);
     }
@@ -374,8 +408,11 @@ export function execute(state: ProgramState, outputs: Output[], opCount: number)
       case OPCODE.DIVIDE:
       case OPCODE.EXPONENT:
       case OPCODE.EQUAL:
+      case OPCODE.NOT_EQUAL:
       case OPCODE.LESS_THAN:
       case OPCODE.GREATER_THAN:
+      case OPCODE.LESS_THAN_EQUAL:
+      case OPCODE.GREATER_THAN_EQUAL:
       case OPCODE.AND:
       case OPCODE.OR: {
         const b = valueToNumberOrDie(pop(stack));
@@ -399,6 +436,11 @@ export function execute(state: ProgramState, outputs: Output[], opCount: number)
           // {die}d{die} always returns a die, not a collection
           stack.push(collectionToDie(collection));
         }
+        break;
+      }
+      case OPCODE.UNARY_D: {
+        const a = pop(stack);
+        stack.push(valueToNewDie(a));
         break;
       }
       case OPCODE.LENGTH: {
@@ -573,4 +615,239 @@ export function execute(state: ProgramState, outputs: Output[], opCount: number)
   state.ip = ip;
   state.fp = fp;
   return false;
+}
+
+if (import.meta.vitest) {
+  const { suite, test, expect } = import.meta.vitest;
+
+  function runCode(code: number[], expectedOutput: Die | number) {
+    const program: Program = {
+      code,
+      functions: [],
+      outputNames: [],
+    };
+    const state: ProgramState = {
+      program,
+      stack: [],
+      ip: 0,
+      fp: 0,
+    };
+    const outputs: Output[] = [];
+    const finished = execute(state, outputs, 1000);
+    if (!finished) {
+      throw new Error("Program did not finish executing");
+    }
+    expect(outputs[0][1]).toEqual(valueToDie(expectedOutput));
+  }
+
+  const {
+    IMMEDIATE,
+    OUTPUT,
+    ADD,
+    SUBTRACT,
+    MULTIPLY,
+    DIVIDE,
+    EXPONENT,
+    EQUAL,
+    NOT_EQUAL,
+    LESS_THAN,
+    GREATER_THAN,
+    LESS_THAN_EQUAL,
+    GREATER_THAN_EQUAL,
+    AND,
+    OR,
+    D,
+    SEQUENCE,
+    LENGTH,
+    AT,
+    RANGE,
+    UNARY_D,
+  } = OPCODE;
+
+  suite("opcodes", () => {
+    test("ADD", () => {
+      runCode([IMMEDIATE, 2, IMMEDIATE, 3, ADD, OUTPUT, -1], 5);
+    });
+
+    test("ADD number,die", () => {
+      runCode(
+        [IMMEDIATE, 2, IMMEDIATE, 3, UNARY_D, ADD, OUTPUT, -1],
+        die([
+          [3, 1],
+          [4, 1],
+          [5, 1],
+        ]),
+      );
+    });
+
+    test("SUBTRACT", () => {
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, SUBTRACT, OUTPUT, -1], 2);
+    });
+
+    test("MULTIPLY", () => {
+      runCode([IMMEDIATE, 4, IMMEDIATE, 3, MULTIPLY, OUTPUT, -1], 12);
+    });
+
+    test("DIVIDE", () => {
+      runCode([IMMEDIATE, 10, IMMEDIATE, 3, DIVIDE, OUTPUT, -1], 3);
+    });
+
+    test("EXPONENT", () => {
+      runCode([IMMEDIATE, 2, IMMEDIATE, 3, EXPONENT, OUTPUT, -1], 8);
+    });
+
+    test("EQUAL", () => {
+      runCode([IMMEDIATE, 5, IMMEDIATE, 5, EQUAL, OUTPUT, -1], 1);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, EQUAL, OUTPUT, -1], 0);
+    });
+
+    test("NOT_EQUAL", () => {
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, NOT_EQUAL, OUTPUT, -1], 1);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 5, NOT_EQUAL, OUTPUT, -1], 0);
+    });
+
+    test("LESS_THAN", () => {
+      runCode([IMMEDIATE, 3, IMMEDIATE, 5, LESS_THAN, OUTPUT, -1], 1);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, LESS_THAN, OUTPUT, -1], 0);
+    });
+
+    test("GREATER_THAN", () => {
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, GREATER_THAN, OUTPUT, -1], 1);
+      runCode([IMMEDIATE, 3, IMMEDIATE, 5, GREATER_THAN, OUTPUT, -1], 0);
+    });
+
+    test("LESS_THAN_EQUAL", () => {
+      runCode([IMMEDIATE, 3, IMMEDIATE, 5, LESS_THAN_EQUAL, OUTPUT, -1], 1);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 5, LESS_THAN_EQUAL, OUTPUT, -1], 1);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, LESS_THAN_EQUAL, OUTPUT, -1], 0);
+    });
+
+    test("GREATER_THAN_EQUAL", () => {
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, GREATER_THAN_EQUAL, OUTPUT, -1], 1);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 5, GREATER_THAN_EQUAL, OUTPUT, -1], 1);
+      runCode([IMMEDIATE, 3, IMMEDIATE, 5, GREATER_THAN_EQUAL, OUTPUT, -1], 0);
+    });
+
+    test("AND", () => {
+      runCode([IMMEDIATE, 1, IMMEDIATE, 1, AND, OUTPUT, -1], 1);
+      runCode([IMMEDIATE, 1, IMMEDIATE, 0, AND, OUTPUT, -1], 0);
+      runCode([IMMEDIATE, 0, IMMEDIATE, 1, AND, OUTPUT, -1], 0);
+      runCode([IMMEDIATE, 0, IMMEDIATE, 0, AND, OUTPUT, -1], 0);
+    });
+
+    test("OR", () => {
+      runCode([IMMEDIATE, 1, IMMEDIATE, 1, OR, OUTPUT, -1], 1);
+      runCode([IMMEDIATE, 1, IMMEDIATE, 0, OR, OUTPUT, -1], 1);
+      runCode([IMMEDIATE, 0, IMMEDIATE, 1, OR, OUTPUT, -1], 1);
+      runCode([IMMEDIATE, 0, IMMEDIATE, 0, OR, OUTPUT, -1], 0);
+    });
+
+    test("SEQUENCE", () => {
+      runCode([IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, OUTPUT, -1], 6);
+      runCode([IMMEDIATE, 3, UNARY_D, SEQUENCE, 1, OUTPUT, -1], 6);
+    });
+
+    test("RANGE", () => {
+      runCode([IMMEDIATE, 1, IMMEDIATE, 3, RANGE, OUTPUT, -1], 6);
+      runCode([IMMEDIATE, 4, IMMEDIATE, 7, RANGE, LENGTH, OUTPUT, -1], 4);
+    });
+
+    test("LENGTH", () => {
+      runCode([IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, LENGTH, OUTPUT, -1], 3);
+    });
+
+    test("D number,number", () => {
+      runCode(
+        [IMMEDIATE, 2, IMMEDIATE, 4, D, OUTPUT, -1],
+        collectionToDie(
+          collection([
+            [sequence([1, 1]), 1],
+            [sequence([2, 1]), 2],
+            [sequence([3, 1]), 2],
+            [sequence([4, 1]), 2],
+            [sequence([2, 2]), 1],
+            [sequence([3, 2]), 2],
+            [sequence([4, 2]), 2],
+            [sequence([3, 3]), 1],
+            [sequence([4, 3]), 2],
+            [sequence([4, 4]), 1],
+          ]),
+        ),
+      );
+    });
+
+    test("D number,sequence", () => {
+      runCode(
+        [IMMEDIATE, 2, IMMEDIATE, 3, IMMEDIATE, 5, SEQUENCE, 2, D, OUTPUT, -1],
+        collectionToDie(
+          collection([
+            [sequence([3, 3]), 1],
+            [sequence([3, 5]), 2],
+            [sequence([5, 5]), 1],
+          ]),
+        ),
+      );
+    });
+
+    test("D die,die", () => {
+      runCode(
+        [
+          IMMEDIATE,
+          0,
+          IMMEDIATE,
+          0,
+          IMMEDIATE,
+          1,
+          SEQUENCE,
+          3,
+          UNARY_D,
+          IMMEDIATE,
+          2,
+          D,
+          OUTPUT,
+          -1,
+        ],
+        die([
+          [0, 4],
+          [1, 1],
+          [2, 1],
+        ]),
+      );
+
+      runCode(
+        [IMMEDIATE, 2, IMMEDIATE, 2, D, IMMEDIATE, 2, D, OUTPUT, -1],
+        die([
+          [2, 4],
+          [3, 12],
+          [4, 17],
+          [5, 16],
+          [6, 10],
+          [7, 4],
+          [8, 1],
+        ]),
+      );
+    });
+
+    test("UNARY_D", () => {
+      runCode(
+        [IMMEDIATE, 3, UNARY_D, OUTPUT, -1],
+        die([
+          [1, 1],
+          [2, 1],
+          [3, 1],
+        ]),
+      );
+    });
+
+    test("AT", () => {
+      runCode(
+        [IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, IMMEDIATE, 2, AT, OUTPUT, -1],
+        2,
+      );
+      runCode(
+        [IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, IMMEDIATE, 4, AT, OUTPUT, -1],
+        0,
+      );
+    });
+  });
 }
