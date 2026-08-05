@@ -4,7 +4,8 @@
     "lib": ["ES2019", "DOM"],
     "module": "es2020",
     "composite": true,
-    "types": ["vite-plus/test/importMeta"],
+    "types": ["vite-plus/client", "vite-plus/test/importMeta"],
+    "jsx": "react-jsx",
 
     /* Bundler mode */
     "moduleResolution": "bundler",

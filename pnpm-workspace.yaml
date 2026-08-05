@@ -1,0 +1,3 @@
+overrides:
+  lightningcss: "1.33.0"
+  rollup: "npm:rolldown@1.2.1"
