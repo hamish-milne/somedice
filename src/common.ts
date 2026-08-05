@@ -1,7 +1,8 @@
 const { freeze } = Object;
 
-export const OPCODE = freeze({
-  NOP: 0,
+type ValueOf<T> = T[keyof T];
+
+export const BINARY_OPERATOR = freeze({
   ADD: 1,
   SUBTRACT: 2,
   MULTIPLY: 3,
@@ -20,14 +21,26 @@ export const OPCODE = freeze({
   AT: 16,
   RANGE: 17,
   LENGTH: 18,
-  SEQUENCE: 19,
-  L_LOAD: 20,
-  L_STORE: 21,
-  RETURN: 22,
-  UNARY_MINUS: 23,
-  UNARY_D: 24,
+});
+export type BINARY_OPERATOR = ValueOf<typeof BINARY_OPERATOR>;
+
+export const UNARY_OPERATOR = freeze({
+  UNARY_PLUS: 0, // Same as NOP
+  UNARY_MINUS: 19,
+  UNARY_D: 20,
+});
+export type UNARY_OPERATOR = ValueOf<typeof UNARY_OPERATOR>;
+
+export const OPCODE = freeze({
+  NOP: 0,
+  ...BINARY_OPERATOR,
+  ...UNARY_OPERATOR,
+  SEQUENCE: 21,
+  L_LOAD: 22,
+  L_STORE: 23,
+  RETURN: 24,
   JUMP: 25,
-  JUMP_IF_FALSE: 27,
+  JUMP_IF_FALSE: 26,
   CALL: 28,
   G_LOAD: 29,
   G_STORE: 30,
@@ -37,17 +50,19 @@ export const OPCODE = freeze({
   IMMEDIATE: 34,
   RESERVE: 35,
 });
+export type OPCODE = ValueOf<typeof OPCODE>;
 
 export const KIND = freeze({
-  NUMBER: 0,
-  SEQUENCE: 1,
-  DIE: 2,
-  COLLECTION: 3,
+  ANY: 0,
+  NUMBER: 1,
+  SEQUENCE: 2,
+  DIE: 3,
+  COLLECTION: 4,
 });
-export type KIND = (typeof KIND)[keyof typeof KIND];
+export type KIND = ValueOf<typeof KIND>;
 
 export type Program = {
   code: number[];
-  functions: [params: (KIND | null)[], ptr: number][];
+  functions: [params: KIND[], ptr: number][];
   outputNames: string[][];
 };

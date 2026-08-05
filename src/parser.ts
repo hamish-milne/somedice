@@ -1,48 +1,33 @@
-import { KIND, OPCODE, type Program } from "./common";
+import { BINARY_OPERATOR, KIND, OPCODE, UNARY_OPERATOR, type Program } from "./common";
 
-const { freeze, entries, fromEntries } = Object;
+const { freeze, values, entries, fromEntries } = Object;
 
 const TOKEN = freeze({
+  ...BINARY_OPERATOR,
   OUTPUT: 101,
   FUNCTION: 102,
   NAMED: 103,
   VARIABLE: 104,
   KEYWORD: 105,
+  LOOP: 106,
+  OVER: 107,
+  RESULT: 108,
+  IF: 109,
+  ELSE: 110,
   STRING: 201,
   NUMBER: 202,
-  LOOP: 205,
-  OVER: 206,
-  RESULT: 207,
-  IF: 208,
-  ELSE: 209,
-  ADD: 301,
-  SUBTRACT: 302,
-  MULTIPLY: 303,
-  DIVIDE: 304,
-  EXPONENT: 305,
-  EQUAL: 306,
-  NOT_EQUAL: 307,
-  LESS_THAN: 308,
-  GREATER_THAN: 309,
-  LESS_THAN_EQUAL: 310,
-  GREATER_THAN_EQUAL: 311,
-  AND: 312,
-  OR: 313,
-  NOT: 314,
-  D: 315,
-  AT: 316,
-  RANGE: 317,
-  LENGTH: 318,
-  LPAREN: 401,
-  RPAREN: 402,
-  LBRACKET: 403,
-  RBRACKET: 404,
-  LBRACE: 405,
-  RBRACE: 406,
-  COMMA: 407,
-  COLON: 408,
-  EOF: 500,
+  LPAREN: 301,
+  RPAREN: 302,
+  LBRACKET: 303,
+  RBRACKET: 304,
+  LBRACE: 305,
+  RBRACE: 306,
+  COMMA: 307,
+  COLON: 308,
+  EOF: 400,
 });
+
+const PLACEHOLDER = -6666;
 
 const TOKEN_NAME_MAP: { readonly [key: number]: string } = freeze(
   fromEntries(entries(TOKEN).map(([key, value]) => [value, key])),
@@ -89,12 +74,12 @@ const TOKEN_STRING_MAP: readonly [number, string][] = freeze(
   ).sort((a, b) => b[1].length - a[1].length),
 );
 
-const TOKEN_PATTERN_MAP: [number, RegExp][] = [
+const TOKEN_PATTERN_MAP: readonly [number, RegExp][] = freeze([
   [TOKEN.VARIABLE, /[A-Z_]+/y],
   [TOKEN.NUMBER, /[1-9][0-9]*/y],
   [TOKEN.KEYWORD, /[a-z]+/y],
   [TOKEN.STRING, /"[^"]*"/y],
-];
+]);
 
 const PATTERN_SPACE = /\s+/y;
 const PATTERN_COMMENT = /\\[^\\]*\\/y;
@@ -104,7 +89,7 @@ type ParserState = {
   position: number;
   globals: string[];
   locals: string[] | undefined;
-  functions: [name: (string | KIND | null)[], ptr: number][];
+  functions: [name: (string | KIND)[], ptr: number][];
   outputNames: string[][];
   code: number[];
 };
@@ -166,34 +151,46 @@ function expectToken(state: ParserState, expectedToken: number): string {
   return value;
 }
 
-const unaryTokens = {
+const unaryTokens = freeze({
   [TOKEN.SUBTRACT]: OPCODE.UNARY_MINUS,
   [TOKEN.D]: OPCODE.UNARY_D,
   [TOKEN.NOT]: OPCODE.NOT,
   [TOKEN.LENGTH]: OPCODE.LENGTH,
-  [TOKEN.ADD]: OPCODE.NOP,
-};
+  [TOKEN.ADD]: OPCODE.UNARY_PLUS,
+});
+const binaryTokens = freeze(values<number>(BINARY_OPERATOR));
 
-const operatorPrecedence = [
-  OPCODE.UNARY_D,
-  OPCODE.D,
-  OPCODE.UNARY_MINUS,
-  OPCODE.NOP,
-  OPCODE.NOT,
-  OPCODE.LENGTH,
-  OPCODE.EXPONENT,
-  OPCODE.MULTIPLY,
-  OPCODE.DIVIDE,
-  OPCODE.ADD,
-  OPCODE.SUBTRACT,
-  OPCODE.EQUAL,
-  OPCODE.NOT_EQUAL,
-  OPCODE.LESS_THAN,
-  OPCODE.GREATER_THAN,
-  OPCODE.LESS_THAN_EQUAL,
-  OPCODE.GREATER_THAN_EQUAL,
-];
-type Operator = (typeof operatorPrecedence)[number];
+type Operator = BINARY_OPERATOR | UNARY_OPERATOR;
+const operatorPrecedence: Record<Operator, number> = freeze({
+  [OPCODE.D]: -1,
+  [OPCODE.UNARY_D]: -1,
+
+  [OPCODE.UNARY_PLUS]: 0,
+  [OPCODE.UNARY_MINUS]: 0,
+  [OPCODE.NOT]: 0,
+  [OPCODE.LENGTH]: 0,
+
+  [OPCODE.EXPONENT]: 1,
+
+  [OPCODE.MULTIPLY]: 2,
+  [OPCODE.DIVIDE]: 2,
+
+  [OPCODE.ADD]: 3,
+  [OPCODE.SUBTRACT]: 3,
+
+  [OPCODE.RANGE]: 4,
+  [OPCODE.AT]: 4,
+
+  [OPCODE.EQUAL]: 5,
+  [OPCODE.NOT_EQUAL]: 5,
+  [OPCODE.LESS_THAN]: 5,
+  [OPCODE.GREATER_THAN]: 5,
+  [OPCODE.LESS_THAN_EQUAL]: 5,
+  [OPCODE.GREATER_THAN_EQUAL]: 5,
+
+  [OPCODE.AND]: 6,
+  [OPCODE.OR]: 7,
+});
 
 function loadVar(state: ParserState, value: string): void {
   const { code } = state;
@@ -301,10 +298,7 @@ function parseTerm(state: ParserState): void {
 }
 
 function pushOperator(state: ParserState, ops: Operator[], op: Operator): void {
-  while (
-    ops.length > 0 &&
-    operatorPrecedence.indexOf(ops[ops.length - 1]) <= operatorPrecedence.indexOf(op)
-  ) {
+  while (ops.length > 0 && operatorPrecedence[ops[ops.length - 1]] <= operatorPrecedence[op]) {
     state.code.push(ops.pop()!);
   }
   ops.push(op);
@@ -312,49 +306,23 @@ function pushOperator(state: ParserState, ops: Operator[], op: Operator): void {
 
 function parseExpression(state: ParserState): void {
   const ops: Operator[] = [];
-  let advanceFlag2 = true;
-  while (advanceFlag2) {
-    let advanceFlag1 = true;
-    while (advanceFlag1) {
+  while (true) {
+    while (true) {
       const [token1, , newPosition1] = nextToken(state);
-      switch (token1) {
-        case TOKEN.SUBTRACT:
-        case TOKEN.D:
-        case TOKEN.NOT:
-        case TOKEN.LENGTH:
-        case TOKEN.ADD:
-          advance(state, newPosition1);
-          pushOperator(state, ops, unaryTokens[token1]);
-          break;
-        default:
-          advanceFlag1 = false;
-          break;
+      if (token1 in unaryTokens) {
+        advance(state, newPosition1);
+        pushOperator(state, ops, unaryTokens[token1 as keyof typeof unaryTokens]);
+      } else {
+        break;
       }
     }
     parseTerm(state);
     const [token2, , newPosition2] = nextToken(state);
-    switch (token2) {
-      case TOKEN.ADD:
-      case TOKEN.SUBTRACT:
-      case TOKEN.MULTIPLY:
-      case TOKEN.DIVIDE:
-      case TOKEN.EXPONENT:
-      case TOKEN.EQUAL:
-      case TOKEN.NOT_EQUAL:
-      case TOKEN.LESS_THAN:
-      case TOKEN.GREATER_THAN:
-      case TOKEN.GREATER_THAN_EQUAL:
-      case TOKEN.LESS_THAN_EQUAL:
-      case TOKEN.AND:
-      case TOKEN.OR:
-      case TOKEN.RANGE:
-      case TOKEN.D:
-        advance(state, newPosition2);
-        pushOperator(state, ops, (token2 - 300) as Operator);
-        break;
-      default:
-        advanceFlag2 = false;
-        break;
+    if (binaryTokens.includes(token2)) {
+      advance(state, newPosition2);
+      pushOperator(state, ops, token2 as Operator);
+    } else {
+      break;
     }
   }
   while (ops.length > 0) {
@@ -387,7 +355,7 @@ function parseAssignment(state: ParserState, value: string): void {
 
 function branch(state: ParserState, opcode: number, inner: (state: ParserState) => void): void {
   const { code } = state;
-  code.push(opcode, 0); // Placeholder for jump offset
+  code.push(opcode, PLACEHOLDER);
   const jumpOffsetIndex = code.length - 1;
   inner(state);
   const jumpOffset = code.length - jumpOffsetIndex - 1;
@@ -431,7 +399,7 @@ function parseFunction(state: ParserState) {
     throw new Error("Nested functions are not supported");
   }
   expectToken(state, TOKEN.COLON);
-  const functionName: (string | KIND | null)[] = [];
+  const functionName: (string | KIND)[] = [];
   const parameterNames: string[] = [];
   while (true) {
     const [paramToken, paramValue, paramNewPosition] = nextToken(state);
@@ -471,7 +439,7 @@ function parseFunction(state: ParserState) {
               );
           }
         } else {
-          functionName.push(null);
+          functionName.push(KIND.ANY);
         }
         break;
       }
@@ -485,7 +453,7 @@ function parseFunction(state: ParserState) {
   const { code, locals } = state;
   branch(state, OPCODE.JUMP, () => {
     state.functions.push([functionName, code.length]);
-    code.push(OPCODE.RESERVE, 0); // Reserve space for local variables
+    code.push(OPCODE.RESERVE, PLACEHOLDER); // Reserve space for local variables
     const reserveIdx = code.length - 1;
     parseBlock(state);
     state.code[reserveIdx] = locals.length - parameterNames.length; // Update reserved space for local variables
@@ -616,7 +584,7 @@ export function parseProgram(input: string): Program {
     locals: undefined,
     functions: [],
     outputNames: [],
-    code: [OPCODE.RESERVE, 0], // Reserve space for global variables
+    code: [OPCODE.RESERVE, PLACEHOLDER], // Reserve space for global variables
   };
   parseStatements(state);
   const [token] = nextToken(state);

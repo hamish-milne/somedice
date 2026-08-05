@@ -279,7 +279,7 @@ function sequenceIndex(seq: Sequence, index: number): number {
   return seq[index - 1];
 }
 
-function functionCall(stack: ProgramValue[], fp: number, parameters: (KIND | null)[]) {
+function functionCall(stack: ProgramValue[], fp: number, parameters: KIND[]) {
   const dieCall: boolean[] = Array(parameters.length).fill(false);
   for (let i = parameters.length - 1; i >= 0; i--) {
     const paramKind = parameters[i];
@@ -306,7 +306,7 @@ function functionCall(stack: ProgramValue[], fp: number, parameters: (KIND | nul
       case KIND.DIE:
         stack[fp + i] = valueToDie(arg);
         break;
-      default:
+      case KIND.ANY:
         stack[fp + i] = arg;
         break;
     }
