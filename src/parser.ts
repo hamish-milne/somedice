@@ -230,13 +230,15 @@ function parseTerm(state: ParserState): void {
     case TOKEN.LBRACE: {
       advance(state, newPosition);
       let count = 0;
-      while (true) {
-        if (nextToken(state)[0] === TOKEN.RBRACE) {
-          break;
+      if (nextToken(state)[0] !== TOKEN.RBRACE) {
+        while (true) {
+          parseExpression(state);
+          count++;
+          if (nextToken(state)[0] === TOKEN.RBRACE) {
+            break;
+          }
+          expectToken(state, TOKEN.COMMA);
         }
-        parseExpression(state);
-        count++;
-        expectToken(state, TOKEN.COMMA);
       }
       code.push(OPCODE.SEQUENCE, count);
       expectToken(state, TOKEN.RBRACE);
@@ -353,29 +355,29 @@ function parseAssignment(state: ParserState, value: string): void {
   storeVariable(state, value);
 }
 
-function branch(state: ParserState, opcode: number, inner: (state: ParserState) => void): void {
+function branch(state: ParserState, opcode: number, inner: (state: ParserState) => void) {
   const { code } = state;
   code.push(opcode, PLACEHOLDER);
   const jumpOffsetIndex = code.length - 1;
   inner(state);
   const jumpOffset = code.length - jumpOffsetIndex - 1;
   code[jumpOffsetIndex] = jumpOffset;
+  return jumpOffsetIndex;
 }
 
 function parseConditional(state: ParserState) {
   parseExpression(state);
-  branch(state, OPCODE.JUMP_IF_FALSE, parseBlock);
+  const jumpIfFalseIndex = branch(state, OPCODE.JUMP_IF_FALSE, parseBlock);
   const [token, , newPosition] = nextToken(state);
-  switch (token) {
-    case TOKEN.ELSE: {
-      advance(state, newPosition);
+  if (token === TOKEN.ELSE) {
+    state.code[jumpIfFalseIndex] += 2; // Skip over the jump instruction for the else block
+    advance(state, newPosition);
+    const [token1, , newPosition1] = nextToken(state);
+    if (token1 === TOKEN.IF) {
+      advance(state, newPosition1);
+      branch(state, OPCODE.JUMP, parseConditional);
+    } else {
       branch(state, OPCODE.JUMP, parseBlock);
-      break;
-    }
-    case TOKEN.IF: {
-      advance(state, newPosition);
-      parseConditional(state);
-      break;
     }
   }
 }
@@ -706,6 +708,91 @@ if (import.meta.vitest) {
         OPCODE.IMMEDIATE,
         2,
         OPCODE.EXPONENT,
+        OPCODE.OUTPUT,
+        -1,
+      ]);
+      expect(program.functions).toEqual([]);
+      expect(program.outputNames).toEqual([]);
+    });
+
+    it("should parse loops correctly", () => {
+      const program = parseProgram(`
+        loop I over {1..5} {
+          output I
+        }
+      `);
+      expect(program.code).toEqual([
+        OPCODE.RESERVE,
+        1,
+        OPCODE.IMMEDIATE,
+        1,
+        OPCODE.IMMEDIATE,
+        5,
+        OPCODE.RANGE,
+        OPCODE.SEQUENCE,
+        1,
+        OPCODE.LOOP_INIT,
+        OPCODE.LOOP_START,
+        8,
+        OPCODE.G_STORE,
+        0,
+        OPCODE.G_LOAD,
+        0,
+        OPCODE.OUTPUT,
+        -1,
+        OPCODE.JUMP,
+        -10,
+      ]);
+      expect(program.functions).toEqual([]);
+      expect(program.outputNames).toEqual([]);
+    });
+
+    it("should parse nested conditionals correctly", () => {
+      const program = parseProgram(`
+        X: 5
+        if X > 3 {
+          output 1
+        } else if X < 2 {
+          output 2
+        } else {
+          output 3
+        }
+      `);
+      expect(program.code).toEqual([
+        OPCODE.RESERVE,
+        1,
+        OPCODE.IMMEDIATE,
+        5,
+        OPCODE.G_STORE,
+        0,
+        OPCODE.G_LOAD,
+        0,
+        OPCODE.IMMEDIATE,
+        3,
+        OPCODE.GREATER_THAN,
+        OPCODE.JUMP_IF_FALSE,
+        6,
+        OPCODE.IMMEDIATE,
+        1,
+        OPCODE.OUTPUT,
+        -1,
+        OPCODE.JUMP,
+        17,
+        OPCODE.G_LOAD,
+        0,
+        OPCODE.IMMEDIATE,
+        2,
+        OPCODE.LESS_THAN,
+        OPCODE.JUMP_IF_FALSE,
+        6,
+        OPCODE.IMMEDIATE,
+        2,
+        OPCODE.OUTPUT,
+        -1,
+        OPCODE.JUMP,
+        4,
+        OPCODE.IMMEDIATE,
+        3,
         OPCODE.OUTPUT,
         -1,
       ]);
