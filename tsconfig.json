@@ -1,6 +1,24 @@
 {
   "compilerOptions": {
-    "lib": ["ES2025", "DOM"],
-    "verbatimModuleSyntax": true
+    "target": "ES2019",
+    "lib": ["ES2019", "DOM"],
+    "module": "es2020",
+    "composite": true,
+    "types": ["vite-plus/test/importMeta"],
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "moduleDetection": "force",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
   }
 }
