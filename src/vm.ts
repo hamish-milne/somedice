@@ -313,43 +313,6 @@ function sequenceIndex(seq: Sequence, index: number): number {
   return seq[index - 1];
 }
 
-function functionCall(stack: ProgramValue[], fp: number, parameters: KIND[]) {
-  const dieCall: boolean[] = Array(parameters.length).fill(false);
-  for (let i = parameters.length - 1; i >= 0; i--) {
-    const paramKind = parameters[i];
-    const arg = pop(stack);
-    switch (paramKind) {
-      case KIND.NUMBER:
-        if (typeof arg !== "number" && arg.kind !== KIND.SEQUENCE) {
-          dieCall[i] = true;
-          stack[fp + i] = valueToDie(arg);
-        } else {
-          stack[fp + i] = valueToNumber(arg);
-        }
-        break;
-      case KIND.SEQUENCE:
-        if (typeof arg === "number") {
-          stack[fp + i] = sequence([arg]);
-        } else if (arg.kind === KIND.SEQUENCE) {
-          stack[fp + i] = arg;
-        } else {
-          dieCall[i] = true;
-          stack[fp + i] = valueToCollection(arg);
-        }
-        break;
-      case KIND.DIE:
-        stack[fp + i] = valueToDie(arg);
-        break;
-      case KIND.ANY:
-        stack[fp + i] = arg;
-        break;
-    }
-  }
-  if (dieCall.some((isDie) => isDie)) {
-    throw new Error("Not implemented");
-  }
-}
-
 export type ProgramState = {
   program: Program;
   stack: ProgramValue[];
@@ -386,7 +349,7 @@ export type Output = [name: string, value: Die];
 
 export function execute(state: ProgramState, outputs: Output[], opCount: number): boolean {
   const { program, stack } = state;
-  const { code, functions } = program;
+  const { code } = program;
   let { ip, fp } = state;
   for (let executedOps = 0; executedOps < opCount; executedOps++) {
     if (ip >= code.length) {
@@ -455,8 +418,8 @@ export function execute(state: ProgramState, outputs: Output[], opCount: number)
         break;
       }
       case OPCODE.AT: {
-        const index = valueToNumber(pop(stack));
         const a = pop(stack);
+        const index = valueToNumber(pop(stack));
         if (typeof a === "number") {
           throw new Error("Cannot index into a number");
         }
@@ -534,14 +497,52 @@ export function execute(state: ProgramState, outputs: Output[], opCount: number)
         }
         break;
       }
+      case OPCODE.FUNCTION: {
+        const paramCount = code[ip++];
+        const returnAddress = popNumber(stack);
+        // Save the frame pointer and return address
+        stack.splice(stack.length - paramCount, 0, returnAddress, fp);
+        fp = stack.length - paramCount;
+        const dieCall: boolean[] = Array(paramCount).fill(false);
+        for (let i = 0; i < paramCount; i++) {
+          const paramKind = code[ip++] as KIND;
+          const arg = stack[fp + i];
+          switch (paramKind) {
+            case KIND.NUMBER:
+              if (typeof arg !== "number" && arg.kind !== KIND.SEQUENCE) {
+                dieCall[i] = true;
+                stack[fp + i] = valueToDie(arg);
+              } else {
+                stack[fp + i] = valueToNumber(arg);
+              }
+              break;
+            case KIND.SEQUENCE:
+              if (typeof arg === "number") {
+                stack[fp + i] = sequence([arg]);
+              } else if (arg.kind === KIND.SEQUENCE) {
+                stack[fp + i] = arg;
+              } else {
+                dieCall[i] = true;
+                stack[fp + i] = valueToCollection(arg);
+              }
+              break;
+            case KIND.DIE:
+              stack[fp + i] = valueToDie(arg);
+              break;
+            case KIND.ANY:
+              stack[fp + i] = arg;
+              break;
+          }
+        }
+        if (dieCall.some((isDie) => isDie)) {
+          throw new Error("Not implemented");
+        }
+        break;
+      }
       case OPCODE.CALL: {
-        const argCount = code[ip++];
-        const functionIndex = code[ip++];
-        const [params, ptr] = functions[functionIndex];
-        stack.splice(stack.length - argCount, 0, ip, fp); // Push return address and frame pointer
-        fp = stack.length - argCount; // Update frame pointer to the start of the arguments
-        ip = ptr; // Jump to function code
-        functionCall(stack, fp, params);
+        const functionPtr = code[ip++];
+        stack.push(ip); // Save the return address
+        ip = functionPtr; // Jump to the function
         break;
       }
       case OPCODE.RETURN: {
@@ -623,7 +624,6 @@ if (import.meta.vitest) {
   function runCode(code: number[], expectedOutput: Die | number) {
     const program: Program = {
       code,
-      functions: [],
       outputNames: [],
     };
     const state: ProgramState = {
@@ -662,6 +662,11 @@ if (import.meta.vitest) {
     AT,
     RANGE,
     UNARY_D,
+    LOOP_INIT,
+    LOOP_START,
+    G_LOAD,
+    G_STORE,
+    JUMP,
   } = OPCODE;
 
   suite("opcodes", () => {
@@ -754,6 +759,7 @@ if (import.meta.vitest) {
 
     test("LENGTH", () => {
       runCode([IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, LENGTH, OUTPUT, -1], 3);
+      runCode([IMMEDIATE, 3, IMMEDIATE, 6, D, LENGTH, OUTPUT, -1], 3);
     });
 
     test("D number,number", () => {
@@ -841,13 +847,58 @@ if (import.meta.vitest) {
 
     test("AT", () => {
       runCode(
-        [IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, IMMEDIATE, 2, AT, OUTPUT, -1],
+        [IMMEDIATE, 2, IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, AT, OUTPUT, -1],
         2,
       );
       runCode(
-        [IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, IMMEDIATE, 4, AT, OUTPUT, -1],
+        [IMMEDIATE, 4, IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, AT, OUTPUT, -1],
         0,
       );
     });
+
+    test("AT collection", () => {
+      runCode(
+        [IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, D, AT, OUTPUT, -1],
+        die([
+          [1, 1],
+          [2, 3],
+          [3, 5],
+        ]),
+      );
+    });
+  });
+
+  test("loop", () => {
+    runCode(
+      [
+        IMMEDIATE,
+        0,
+        G_STORE,
+        0,
+        IMMEDIATE,
+        1,
+        IMMEDIATE,
+        2,
+        IMMEDIATE,
+        3,
+        SEQUENCE,
+        3,
+        LOOP_INIT,
+        LOOP_START,
+        7,
+        G_LOAD,
+        0,
+        ADD,
+        G_STORE,
+        0,
+        JUMP,
+        -9,
+        G_LOAD,
+        0,
+        OUTPUT,
+        -1,
+      ],
+      6,
+    );
   });
 }

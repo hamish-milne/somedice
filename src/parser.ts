@@ -89,7 +89,7 @@ type ParserState = {
   position: number;
   globals: string[];
   locals: string[] | undefined;
-  functions: [name: (string | KIND)[], ptr: number][];
+  functions: [name: (string | null)[], ptr: number][];
   outputNames: string[][];
   code: number[];
 };
@@ -270,28 +270,28 @@ function parseTerm(state: ParserState): void {
       if (args.length === 0) {
         throw new Error(`Empty function call at position ${state.position}`);
       }
-      let functionIdx = -1;
+      let foundPtr = -1;
       for (let i = 0; i < state.functions.length; i++) {
-        const [functionName] = state.functions[i];
+        const [functionName, functionPtr] = state.functions[i];
         if (functionName.length !== args.length) {
           continue;
         }
         let match = true;
         for (let j = 0; j < functionName.length; j++) {
-          if (typeof functionName[j] === "string" && functionName[j] !== args[j]) {
+          if (functionName[j] && functionName[j] !== args[j]) {
             match = false;
             break;
           }
         }
         if (match) {
-          functionIdx = i;
+          foundPtr = functionPtr;
           break;
         }
       }
-      if (functionIdx === -1) {
+      if (foundPtr === -1) {
         throw new Error(`Function not found for call at position ${state.position}`);
       }
-      code.push(OPCODE.CALL, argCount, functionIdx);
+      code.push(OPCODE.CALL, foundPtr);
       break;
     }
     default:
@@ -401,64 +401,70 @@ function parseFunction(state: ParserState) {
     throw new Error("Nested functions are not supported");
   }
   expectToken(state, TOKEN.COLON);
-  const functionName: (string | KIND)[] = [];
+  const functionName: (string | null)[] = [];
   const parameterNames: string[] = [];
-  while (true) {
-    const [paramToken, paramValue, paramNewPosition] = nextToken(state);
-    if (paramToken === TOKEN.LBRACE) {
-      break;
-    }
-    switch (paramToken) {
-      case TOKEN.KEYWORD:
-        advance(state, paramNewPosition);
-        functionName.push(paramValue);
-        break;
-      case TOKEN.VARIABLE: {
-        advance(state, paramNewPosition);
-        if (parameterNames.includes(paramValue)) {
-          throw new Error(
-            `Duplicate parameter name ${paramValue} in function definition at position ${state.position}`,
-          );
-        }
-        parameterNames.push(paramValue);
-        const paramColon = nextToken(state);
-        if (paramColon[0] === TOKEN.COLON) {
-          advance(state, paramColon[2]);
-          const paramType = expectToken(state, TOKEN.KEYWORD);
-          switch (paramType) {
-            case "n":
-              functionName.push(KIND.NUMBER);
-              break;
-            case "s":
-              functionName.push(KIND.SEQUENCE);
-              break;
-            case "d":
-              functionName.push(KIND.DIE);
-              break;
-            default:
-              throw new Error(
-                `Unknown parameter type ${paramType} for parameter ${paramValue} at position ${state.position}`,
-              );
-          }
-        } else {
-          functionName.push(KIND.ANY);
-        }
+
+  const { code } = state;
+  branch(state, OPCODE.JUMP, () => {
+    const functionPtr = code.length;
+    code.push(OPCODE.FUNCTION, PLACEHOLDER); // Placeholder for number of arguments
+    const nArgsIndex = code.length - 1;
+    while (true) {
+      const [paramToken, paramValue, paramNewPosition] = nextToken(state);
+      if (paramToken === TOKEN.LBRACE) {
         break;
       }
-      default:
-        throw new Error(
-          `Unexpected token ${TOKEN_NAME_MAP[paramToken]} in function parameter list at position ${state.position}`,
-        );
+      switch (paramToken) {
+        case TOKEN.KEYWORD:
+          advance(state, paramNewPosition);
+          functionName.push(paramValue);
+          break;
+        case TOKEN.VARIABLE: {
+          advance(state, paramNewPosition);
+          if (parameterNames.includes(paramValue)) {
+            throw new Error(
+              `Duplicate parameter name ${paramValue} in function definition at position ${state.position}`,
+            );
+          }
+          parameterNames.push(paramValue);
+          functionName.push(null);
+          const paramColon = nextToken(state);
+          if (paramColon[0] === TOKEN.COLON) {
+            advance(state, paramColon[2]);
+            const paramType = expectToken(state, TOKEN.KEYWORD);
+            switch (paramType) {
+              case "n":
+                code.push(KIND.NUMBER);
+                break;
+              case "s":
+                code.push(KIND.SEQUENCE);
+                break;
+              case "d":
+                code.push(KIND.DIE);
+                break;
+              default:
+                throw new Error(
+                  `Unknown parameter type ${paramType} for parameter ${paramValue} at position ${state.position}`,
+                );
+            }
+          } else {
+            code.push(KIND.ANY);
+          }
+          break;
+        }
+        default:
+          throw new Error(
+            `Unexpected token ${TOKEN_NAME_MAP[paramToken]} in function parameter list at position ${state.position}`,
+          );
+      }
     }
-  }
-  state.locals = parameterNames;
-  const { code, locals } = state;
-  branch(state, OPCODE.JUMP, () => {
-    state.functions.push([functionName, code.length]);
+    state.functions.push([functionName, functionPtr]);
+    code[nArgsIndex] = parameterNames.length; // Update number of arguments
+    state.locals = parameterNames;
     code.push(OPCODE.RESERVE, PLACEHOLDER); // Reserve space for local variables
     const reserveIdx = code.length - 1;
     parseBlock(state);
-    state.code[reserveIdx] = locals.length - parameterNames.length; // Update reserved space for local variables
+    state.code[reserveIdx] = state.locals.length - parameterNames.length; // Update reserved space for local variables
     state.code.push(OPCODE.SEQUENCE, 0, OPCODE.RETURN); // Ensure function always returns a value
   });
   state.locals = undefined;
@@ -596,9 +602,6 @@ export function parseProgram(input: string): Program {
   state.code[1] = state.globals.length; // Update reserved space for global variables
   return {
     code: state.code,
-    functions: state.functions.map(([params, ptr]) => {
-      return [params.filter((p) => typeof p !== "string"), ptr];
-    }),
     outputNames: state.outputNames,
   };
 }
@@ -644,7 +647,6 @@ if (import.meta.vitest) {
         OPCODE.OUTPUT,
         -1,
       ]);
-      expect(program.functions).toEqual([]);
       expect(program.outputNames).toEqual([]);
     });
 
@@ -660,7 +662,10 @@ if (import.meta.vitest) {
         OPCODE.RESERVE,
         1,
         OPCODE.JUMP,
-        11,
+        14,
+        OPCODE.FUNCTION,
+        1,
+        KIND.NUMBER,
         OPCODE.RESERVE,
         0,
         OPCODE.L_LOAD,
@@ -679,15 +684,13 @@ if (import.meta.vitest) {
         OPCODE.IMMEDIATE,
         5,
         OPCODE.CALL,
-        1,
-        0,
+        4,
         OPCODE.G_LOAD,
         0,
         OPCODE.OUTPUT,
         1,
         0,
       ]);
-      expect(program.functions).toEqual([[[KIND.NUMBER], 4]]);
       expect(program.outputNames).toEqual([["Output ", ""]]);
     });
 
@@ -711,7 +714,6 @@ if (import.meta.vitest) {
         OPCODE.OUTPUT,
         -1,
       ]);
-      expect(program.functions).toEqual([]);
       expect(program.outputNames).toEqual([]);
     });
 
@@ -743,7 +745,6 @@ if (import.meta.vitest) {
         OPCODE.JUMP,
         -10,
       ]);
-      expect(program.functions).toEqual([]);
       expect(program.outputNames).toEqual([]);
     });
 
@@ -796,7 +797,6 @@ if (import.meta.vitest) {
         OPCODE.OUTPUT,
         -1,
       ]);
-      expect(program.functions).toEqual([]);
       expect(program.outputNames).toEqual([]);
     });
   });

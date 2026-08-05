@@ -48,7 +48,8 @@ export const OPCODE = freeze({
   LOOP_START: 32,
   OUTPUT: 33,
   IMMEDIATE: 34,
-  RESERVE: 35,
+  FUNCTION: 35,
+  RESERVE: 36,
 });
 export type OPCODE = ValueOf<typeof OPCODE>;
 
@@ -63,6 +64,5 @@ export type KIND = ValueOf<typeof KIND>;
 
 export type Program = {
   code: number[];
-  functions: [params: KIND[], ptr: number][];
   outputNames: string[][];
 };
