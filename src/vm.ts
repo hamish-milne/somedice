@@ -316,7 +316,7 @@ function functionCall(stack: ProgramValue[], fp: number, parameters: (KIND | nul
   }
 }
 
-type ProgramState = {
+export type ProgramState = {
   program: Program;
   stack: ProgramValue[];
   ip: number;
@@ -348,17 +348,15 @@ function valueToString(value: ProgramValue): string {
 
 const MAX_STACK_SIZE = 10000;
 
-export function execute(
-  state: ProgramState,
-  outputs: [name: string, value: Die][],
-  opCount: number,
-) {
+export type Output = [name: string, value: Die];
+
+export function execute(state: ProgramState, outputs: Output[], opCount: number): boolean {
   const { program, stack } = state;
   const { code, functions } = program;
   let { ip, fp } = state;
   for (let executedOps = 0; executedOps < opCount; executedOps++) {
     if (ip >= code.length) {
-      return;
+      return true;
     }
     if (stack.length > MAX_STACK_SIZE) {
       throw new Error("Stack overflow");
@@ -572,4 +570,7 @@ export function execute(
         throw new Error(`Unknown opcode ${opcode} at instruction pointer ${ip - 1}`);
     }
   }
+  state.ip = ip;
+  state.fp = fp;
+  return false;
 }

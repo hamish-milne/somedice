@@ -56,6 +56,9 @@ const TOKEN_STRING_MAP: readonly [number, string][] = freeze(
       [TOKEN.NAMED, "named"],
       [TOKEN.LOOP, "loop"],
       [TOKEN.OVER, "over"],
+      [TOKEN.RESULT, "result"],
+      [TOKEN.IF, "if"],
+      [TOKEN.ELSE, "else"],
       [TOKEN.ADD, "+"],
       [TOKEN.SUBTRACT, "-"],
       [TOKEN.MULTIPLY, "*"],
@@ -67,9 +70,9 @@ const TOKEN_STRING_MAP: readonly [number, string][] = freeze(
       [TOKEN.LESS_THAN, "<"],
       [TOKEN.GREATER_THAN_EQUAL, ">="],
       [TOKEN.LESS_THAN_EQUAL, "<="],
-      [TOKEN.AND, "and"],
-      [TOKEN.OR, "or"],
-      [TOKEN.NOT, "not"],
+      [TOKEN.AND, "&"],
+      [TOKEN.OR, "|"],
+      [TOKEN.NOT, "!"],
       [TOKEN.D, "d"],
       [TOKEN.AT, "@"],
       [TOKEN.RANGE, ".."],
@@ -90,7 +93,7 @@ const TOKEN_PATTERN_MAP: [number, RegExp][] = [
   [TOKEN.VARIABLE, /[A-Z_]+/y],
   [TOKEN.NUMBER, /[1-9][0-9]*/y],
   [TOKEN.KEYWORD, /[a-z]+/y],
-  [TOKEN.STRING, /"[^"]"/y],
+  [TOKEN.STRING, /"[^"]*"/y],
 ];
 
 const PATTERN_SPACE = /\s+/y;
@@ -145,7 +148,7 @@ function nextToken(state: ParserState): [token: number, value: string, newPositi
       return [token, match[0], pattern.lastIndex];
     }
   }
-  throw new Error(`Unexpected token at position ${state.position}`);
+  throw new Error(`Unexpected token ${input[state.position]} at position ${state.position}`);
 }
 
 function advance(state: ParserState, newPosition: number) {
@@ -228,6 +231,7 @@ function parseTerm(state: ParserState): void {
       break;
     }
     case TOKEN.LBRACE: {
+      advance(state, newPosition);
       let count = 0;
       while (true) {
         if (nextToken(state)[0] === TOKEN.RBRACE) {
@@ -242,6 +246,7 @@ function parseTerm(state: ParserState): void {
       break;
     }
     case TOKEN.LBRACKET: {
+      advance(state, newPosition);
       const args: (string | null)[] = [];
       let argCount = 0;
       while (true) {
@@ -307,9 +312,10 @@ function pushOperator(state: ParserState, ops: Operator[], op: Operator): void {
 
 function parseExpression(state: ParserState): void {
   const ops: Operator[] = [];
-  while (true) {
-    const position1 = state.position;
-    do {
+  let advanceFlag2 = true;
+  while (advanceFlag2) {
+    let advanceFlag1 = true;
+    while (advanceFlag1) {
       const [token1, , newPosition1] = nextToken(state);
       switch (token1) {
         case TOKEN.SUBTRACT:
@@ -320,10 +326,12 @@ function parseExpression(state: ParserState): void {
           advance(state, newPosition1);
           pushOperator(state, ops, unaryTokens[token1]);
           break;
+        default:
+          advanceFlag1 = false;
+          break;
       }
-    } while (state.position !== position1);
+    }
     parseTerm(state);
-    const position2 = state.position;
     const [token2, , newPosition2] = nextToken(state);
     switch (token2) {
       case TOKEN.ADD:
@@ -337,12 +345,16 @@ function parseExpression(state: ParserState): void {
       case TOKEN.GREATER_THAN:
       case TOKEN.GREATER_THAN_EQUAL:
       case TOKEN.LESS_THAN_EQUAL:
+      case TOKEN.AND:
+      case TOKEN.OR:
+      case TOKEN.RANGE:
+      case TOKEN.D:
         advance(state, newPosition2);
         pushOperator(state, ops, (token2 - 300) as Operator);
         break;
-    }
-    if (position2 === state.position) {
-      break;
+      default:
+        advanceFlag2 = false;
+        break;
     }
   }
   while (ops.length > 0) {
@@ -373,22 +385,23 @@ function parseAssignment(state: ParserState, value: string): void {
   storeVariable(state, value);
 }
 
+function branch(state: ParserState, opcode: number, inner: (state: ParserState) => void): void {
+  const { code } = state;
+  code.push(opcode, 0); // Placeholder for jump offset
+  const jumpOffsetIndex = code.length - 1;
+  inner(state);
+  const jumpOffset = code.length - jumpOffsetIndex - 1;
+  code[jumpOffsetIndex] = jumpOffset;
+}
+
 function parseConditional(state: ParserState) {
   parseExpression(state);
-  state.code.push(OPCODE.JUMP_IF_FALSE, 0); // Placeholder for jump offset
-  const jumpOffsetIndex = state.code.length - 1;
-  parseBlock(state);
-  const jumpOffset = state.code.length - jumpOffsetIndex;
-  state.code[jumpOffsetIndex] = jumpOffset;
+  branch(state, OPCODE.JUMP_IF_FALSE, parseBlock);
   const [token, , newPosition] = nextToken(state);
   switch (token) {
     case TOKEN.ELSE: {
       advance(state, newPosition);
-      state.code.push(OPCODE.JUMP, 0); // Placeholder for jump offset
-      const elseJumpOffsetIndex = state.code.length - 1;
-      parseBlock(state);
-      const elseJumpOffset = state.code.length - elseJumpOffsetIndex;
-      state.code[elseJumpOffsetIndex] = elseJumpOffset;
+      branch(state, OPCODE.JUMP, parseBlock);
       break;
     }
     case TOKEN.IF: {
@@ -405,12 +418,12 @@ function parseLoop(state: ParserState) {
   expectToken(state, TOKEN.OVER);
   parseExpression(state);
   code.push(OPCODE.LOOP_INIT);
-  code.push(OPCODE.LOOP_START, 0); // Placeholder for loop start offset
-  const loopStartIdx = code.length - 2;
-  storeVariable(state, loopVar);
-  parseBlock(state);
-  code.push(OPCODE.JUMP, loopStartIdx - code.length);
-  code[loopStartIdx + 1] = code.length - loopStartIdx; // Update loop start offset
+  const loopStartIdx = code.length;
+  branch(state, OPCODE.LOOP_START, () => {
+    storeVariable(state, loopVar);
+    parseBlock(state);
+    code.push(OPCODE.JUMP, loopStartIdx - code.length - 2); // Jump back to loop start
+  });
 }
 
 function parseFunction(state: ParserState) {
@@ -423,7 +436,6 @@ function parseFunction(state: ParserState) {
   while (true) {
     const [paramToken, paramValue, paramNewPosition] = nextToken(state);
     if (paramToken === TOKEN.LBRACE) {
-      advance(state, paramNewPosition);
       break;
     }
     switch (paramToken) {
@@ -469,17 +481,17 @@ function parseFunction(state: ParserState) {
         );
     }
   }
-  state.code.push(OPCODE.JUMP, 0); // Placeholder for jump offset to skip function body
-  const jumpOffsetIndex = state.code.length - 1;
   state.locals = parameterNames;
-  state.functions.push([functionName, state.code.length]);
-  state.code.push(OPCODE.RESERVE, 0); // Reserve space for local variables
-  const reserveIdx = state.code.length - 1;
-  parseBlock(state);
-  state.code[reserveIdx] = state.locals.length - parameterNames.length; // Update reserved space for local variables
-  state.code.push(OPCODE.SEQUENCE, 0, OPCODE.RETURN); // Ensure function always returns a value
+  const { code, locals } = state;
+  branch(state, OPCODE.JUMP, () => {
+    state.functions.push([functionName, code.length]);
+    code.push(OPCODE.RESERVE, 0); // Reserve space for local variables
+    const reserveIdx = code.length - 1;
+    parseBlock(state);
+    state.code[reserveIdx] = locals.length - parameterNames.length; // Update reserved space for local variables
+    state.code.push(OPCODE.SEQUENCE, 0, OPCODE.RETURN); // Ensure function always returns a value
+  });
   state.locals = undefined;
-  state.code[jumpOffsetIndex] = state.code.length - jumpOffsetIndex; // Update jump offset to skip function body
 }
 
 function tokenizeOutputName(str: string): string[] {
@@ -555,8 +567,8 @@ function parseBlock(state: ParserState) {
 
 function parseStatements(state: ParserState) {
   const { code } = state;
-  const position = state.position;
-  do {
+  let advanceFlag = true;
+  while (advanceFlag) {
     const [token, value, newPosition] = nextToken(state);
     switch (token) {
       case TOKEN.VARIABLE:
@@ -590,9 +602,10 @@ function parseStatements(state: ParserState) {
         break;
       }
       default:
+        advanceFlag = false;
         break;
     }
-  } while (state.position !== position);
+  }
 }
 
 export function parseProgram(input: string): Program {
@@ -603,18 +616,133 @@ export function parseProgram(input: string): Program {
     locals: undefined,
     functions: [],
     outputNames: [],
-    code: [],
+    code: [OPCODE.RESERVE, 0], // Reserve space for global variables
   };
   parseStatements(state);
   const [token] = nextToken(state);
   if (token !== TOKEN.EOF) {
     throw new Error(`Unexpected token ${TOKEN_NAME_MAP[token]} at position ${state.position}`);
   }
+  state.code[1] = state.globals.length; // Update reserved space for global variables
   return {
     code: state.code,
     functions: state.functions.map(([params, ptr]) => {
-      return [params.map((p) => (typeof p === "string" ? null : p)), ptr];
+      return [params.filter((p) => typeof p !== "string"), ptr];
     }),
     outputNames: state.outputNames,
   };
+}
+
+if (import.meta.vitest) {
+  const { describe, it, expect } = import.meta.vitest;
+
+  describe("tokenizeOutputName", () => {
+    it("should tokenize output names correctly", () => {
+      expect(tokenizeOutputName("foo [BAR][BAZ] bat [invalid thing] [")).toEqual([
+        "foo ",
+        "BAR",
+        "",
+        "BAZ",
+        " bat [invalid thing] [",
+      ]);
+      expect(tokenizeOutputName("[FOO][BAR]")).toEqual(["", "FOO", "", "BAR", ""]);
+      expect(tokenizeOutputName("no brackets")).toEqual(["no brackets"]);
+      expect(tokenizeOutputName("[VALID][123]")).toEqual(["", "VALID", "[123]"]);
+      expect(tokenizeOutputName("[A][B][C]")).toEqual(["", "A", "", "B", "", "C", ""]);
+    });
+  });
+
+  describe("parseProgram", () => {
+    it("should parse a simple program", () => {
+      const program = parseProgram("X: 5 Y: 10 output X + Y");
+      expect(program.code).toEqual([
+        OPCODE.RESERVE,
+        2,
+        OPCODE.IMMEDIATE,
+        5,
+        OPCODE.G_STORE,
+        0,
+        OPCODE.IMMEDIATE,
+        10,
+        OPCODE.G_STORE,
+        1,
+        OPCODE.G_LOAD,
+        0,
+        OPCODE.G_LOAD,
+        1,
+        OPCODE.ADD,
+        OPCODE.OUTPUT,
+        -1,
+      ]);
+      expect(program.functions).toEqual([]);
+      expect(program.outputNames).toEqual([]);
+    });
+
+    it("should parse a program with a function and output", () => {
+      const program = parseProgram(`
+        function: foo X:n {
+          result: X + 1
+        }
+        BAR: 3
+        output [foo 5] named "Output [BAR]"
+      `);
+      expect(program.code).toEqual([
+        OPCODE.RESERVE,
+        1,
+        OPCODE.JUMP,
+        11,
+        OPCODE.RESERVE,
+        0,
+        OPCODE.L_LOAD,
+        0,
+        OPCODE.IMMEDIATE,
+        1,
+        OPCODE.ADD,
+        OPCODE.RETURN,
+        OPCODE.SEQUENCE,
+        0,
+        OPCODE.RETURN,
+        OPCODE.IMMEDIATE,
+        3,
+        OPCODE.G_STORE,
+        0,
+        OPCODE.IMMEDIATE,
+        5,
+        OPCODE.CALL,
+        1,
+        0,
+        OPCODE.G_LOAD,
+        0,
+        OPCODE.OUTPUT,
+        1,
+        0,
+      ]);
+      expect(program.functions).toEqual([[[KIND.NUMBER], 4]]);
+      expect(program.outputNames).toEqual([["Output ", ""]]);
+    });
+
+    it("should handle operator precedence correctly", () => {
+      const program = parseProgram("output !2d(6+3)^2");
+      expect(program.code).toEqual([
+        OPCODE.RESERVE,
+        0,
+        OPCODE.IMMEDIATE,
+        2,
+        OPCODE.IMMEDIATE,
+        6,
+        OPCODE.IMMEDIATE,
+        3,
+        OPCODE.ADD,
+        OPCODE.D,
+        OPCODE.NOT,
+        OPCODE.IMMEDIATE,
+        2,
+        OPCODE.EXPONENT,
+        OPCODE.OUTPUT,
+        -1,
+      ]);
+      expect(program.functions).toEqual([]);
+      expect(program.outputNames).toEqual([]);
+    });
+  });
 }
