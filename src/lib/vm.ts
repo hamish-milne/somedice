@@ -214,27 +214,103 @@ function product(n: readonly number[]): number {
   return n.reduce((acc, val) => acc * val, 1);
 }
 
+const NUMBER_DESCENDING = (a: number, b: number) => b - a;
+
 function dNumberDie(n: number, d: Die): Collection {
-  const result = collectionMap();
-  const totalCount = Math.pow(d.length, n);
-  const seq: number[] = [];
-  const counts: number[] = [];
-  for (let i = 0; i < totalCount; i++) {
-    let index = i;
-    for (let j = 0; j < n; j++) {
-      const dieIndex = index % d.length;
-      const [value, count] = d[dieIndex];
-      seq.push(value);
-      counts.push(count);
-      index = Math.floor(index / d.length);
+  const vals = d.map((e) => e[0]);
+  const faceCounts = d.map((e) => e[1]);
+  const k = vals.length;
+
+  if (k === 0) return collection(n === 0 ? [[sequence([]), 1]] : []);
+
+  const fact = Array.from<number>({ length: n + 1 });
+  fact[0] = 1;
+  for (let i = 1; i <= n; i++) {
+    fact[i] = fact[i - 1] * i;
+    // n! is the largest value used to derive every count, so bail out here before precision breaks down.
+    if (fact[i] > Number.MAX_SAFE_INTEGER) {
+      throw new Error(
+        `dNumberDie: n=${n} is too large - factorial exceeds Number.MAX_SAFE_INTEGER`,
+      );
     }
-    const combinedCount = product(counts);
-    seq.sort((a, b) => b - a); // Sequences within collections are always in descending order
-    collectionMapAdd(result, sequence([...seq]), combinedCount);
-    seq.length = 0;
-    counts.length = 0;
   }
-  return collection(collectionMapFinish(result));
+
+  const results: CollectionItem[] = [];
+  const seq: number[] = [];
+
+  // Distributes `remaining` dice across faces [idx..k-1]; denom/pow accumulate
+  // the multinomial denominator and the count^exponent product as we go.
+  function recurse(idx: number, remaining: number, denom: number, pow: number): void {
+    if (idx === k - 1) {
+      for (let j = 0; j < remaining; j++) seq.push(vals[idx]);
+      const total = (fact[n] / (denom * fact[remaining])) * pow * faceCounts[idx] ** remaining;
+      results.push([sequence(seq.slice().sort(NUMBER_DESCENDING)), total]);
+      for (let j = 0; j < remaining; j++) seq.pop();
+      return;
+    }
+
+    let facePow = 1;
+    for (let c = 0; c <= remaining; c++) {
+      for (let j = 0; j < c; j++) seq.push(vals[idx]);
+      recurse(idx + 1, remaining - c, denom * fact[c], pow * facePow);
+      for (let j = 0; j < c; j++) seq.pop();
+      facePow *= faceCounts[idx];
+    }
+  }
+
+  recurse(0, n, 1, 1);
+  return collection(results);
+}
+
+function dNumberDie_sum(n: number, d: Die): Die {
+  const faces = d;
+  if (faces.length === 0) return die(n === 0 ? [[0, 1]] : []);
+  if (n === 0) return die([[0, 1]]);
+
+  // Polynomial coefficients indexed from `offset` (the exponent of coeffs[0]).
+  type Poly = { offset: number; coeffs: number[] };
+
+  const [minVal] = faces[0];
+  const [maxVal] = faces[faces.length - 1];
+  const base: Poly = {
+    offset: minVal,
+    coeffs: Array.from<number>({ length: maxVal - minVal + 1 }).fill(0),
+  };
+  for (const [value, count] of faces) base.coeffs[value - minVal] = count;
+
+  function multiply(a: Poly, b: Poly): Poly {
+    const coeffs = Array.from<number>({ length: a.coeffs.length + b.coeffs.length - 1 }).fill(0);
+    for (let i = 0; i < a.coeffs.length; i++) {
+      if (a.coeffs[i] === 0) continue;
+      for (let j = 0; j < b.coeffs.length; j++) {
+        const sum = coeffs[i + j] + a.coeffs[i] * b.coeffs[j];
+        // Each coefficient is a running outcome count; bail out before precision is silently lost.
+        if (sum > Number.MAX_SAFE_INTEGER) {
+          throw new Error(
+            `dNumberDie_sum: n=${n} is too large - a sum's frequency exceeds Number.MAX_SAFE_INTEGER`,
+          );
+        }
+        coeffs[i + j] = sum;
+      }
+    }
+    return { offset: a.offset + b.offset, coeffs };
+  }
+
+  // Exponentiation by squaring: O(log n) multiplications instead of O(n).
+  let result: Poly = { offset: 0, coeffs: [1] };
+  let power = base;
+  let exp = n;
+  while (exp > 0) {
+    if (exp & 1) result = multiply(result, power);
+    exp >>= 1;
+    if (exp > 0) power = multiply(power, power);
+  }
+
+  const output: [number, number][] = [];
+  for (let i = 0; i < result.coeffs.length; i++) {
+    if (result.coeffs[i] > 0) output.push([result.offset + i, result.coeffs[i]]);
+  }
+  return die(output);
 }
 
 function gcd(a: number, b: number): number {
