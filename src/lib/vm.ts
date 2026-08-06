@@ -624,6 +624,7 @@ if (import.meta.vitest) {
   function runCode(code: number[], expectedOutput: Die | number) {
     const program: Program = {
       code,
+      codeLocations: [],
       outputNames: [],
     };
     const state: ProgramState = {

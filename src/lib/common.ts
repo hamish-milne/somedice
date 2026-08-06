@@ -62,7 +62,10 @@ export const KIND = freeze({
 });
 export type KIND = ValueOf<typeof KIND>;
 
+export type Location = readonly [line: number, column: number];
+
 export type Program = {
   code: number[];
+  codeLocations: Location[];
   outputNames: string[][];
 };
