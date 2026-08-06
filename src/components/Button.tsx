@@ -1,11 +1,9 @@
+import type { ComponentProps } from "react";
+
 type ButtonVariant = "primary" | "secondary" | "danger";
 
 interface ButtonProps {
   variant?: ButtonVariant;
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  className?: string;
 }
 
 const variantStyles: Record<ButtonVariant, string> = {
@@ -16,18 +14,27 @@ const variantStyles: Record<ButtonVariant, string> = {
 
 export function Button({
   variant = "secondary",
-  children,
-  onClick,
-  disabled = false,
   className = "",
-}: ButtonProps) {
+  ...props
+}: ButtonProps & ComponentProps<"button">) {
   return (
     <button
-      onClick={onClick}
-      disabled={disabled}
       className={`px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variantStyles[variant]} ${className}`}
-    >
-      {children}
-    </button>
+      {...props}
+    />
+  );
+}
+
+export function RadioButton({
+  variant = "secondary",
+  className = "",
+  ...props
+}: ButtonProps & ComponentProps<"input">) {
+  return (
+    <input
+      type="radio"
+      className={`appearance-none px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variantStyles[variant]} ${className}`}
+      {...props}
+    />
   );
 }

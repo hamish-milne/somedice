@@ -48,6 +48,9 @@ importers:
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1(supports-color@7.2.0)
+      tinystate:
+        specifier: hamish-milne/tinystate#dist
+        version: https://codeload.github.com/hamish-milne/tinystate/tar.gz/33ec172c7d0422f98509d4fa09bc41660b301188(@standard-schema/spec@1.1.0)(react@19.2.8)
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -1783,6 +1786,24 @@ packages:
   tinyrainbow@3.1.1:
     resolution: {integrity: sha512-yau8yJdTt989Mm0Bd/236QnzEiPf2xLLTqUZRUJOo/3CB078LSwzei343DgtJVmfJKJE3TMINY1u42SQsP6mXw==}
     engines: {node: '>=14.0.0'}
+
+  tinystate@https://codeload.github.com/hamish-milne/tinystate/tar.gz/33ec172c7d0422f98509d4fa09bc41660b301188:
+    resolution: {gitHosted: true, integrity: sha512-K4sRIYyQCSB4H1miCticUKR5ZcucC0DRFbJt4FFrW41pUYImizJhKiz7sZGeD8UpwmPjJDYZEL/yUEKLGK45gg==, tarball: https://codeload.github.com/hamish-milne/tinystate/tar.gz/33ec172c7d0422f98509d4fa09bc41660b301188}
+    version: 0.1.10
+    peerDependencies:
+      '@preact/signals': '>=2.0.0'
+      '@standard-schema/spec': '>=1.0.0'
+      preact: '>=10.0.0'
+      react: '>=18.0.0'
+    peerDependenciesMeta:
+      '@preact/signals':
+        optional: true
+      '@standard-schema/spec':
+        optional: true
+      preact:
+        optional: true
+      react:
+        optional: true
 
   totalist@3.0.1:
     resolution: {integrity: sha512-sf4i37nQ2LBx4m3wB74y+ubopq6W/dIzXg0FDGjsYnZHVa1Da8FH853wlL2gtUhg+xJXjfk3kUZS3BRoQeoQBQ==}
@@ -3657,6 +3678,11 @@ snapshots:
   tinypool@2.1.0: {}
 
   tinyrainbow@3.1.1: {}
+
+  tinystate@https://codeload.github.com/hamish-milne/tinystate/tar.gz/33ec172c7d0422f98509d4fa09bc41660b301188(@standard-schema/spec@1.1.0)(react@19.2.8):
+    optionalDependencies:
+      '@standard-schema/spec': 1.1.0
+      react: 19.2.8
 
   totalist@3.0.1: {}
 
