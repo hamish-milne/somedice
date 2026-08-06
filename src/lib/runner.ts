@@ -2,9 +2,9 @@
 import { parseProgram } from "./parser";
 import { execute, type Output, type ProgramState } from "./vm";
 
-type InputMessage = { type: "run"; programText: string };
+export type InputMessage = { type: "run"; programText: string };
 
-type OutputMessage =
+export type OutputMessage =
   | { type: "error"; message: string }
   | { type: "progress"; opCount: number }
   | { type: "result"; outputs: Output[] };

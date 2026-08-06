@@ -1,20 +1,21 @@
+import { patch, useStore, useWatch } from "tinystate";
 import { Button } from "./Button";
+import { useCallback } from "react";
 
-interface StatusBarProps {
-  isRunning?: boolean;
-  progress?: number;
-  operationCount?: number;
-  onStart?: () => void;
-  onCancel?: () => void;
-}
+export function StatusBar() {
+  const store = useStore();
+  const operationCount = useWatch(store, "opCount");
+  const isRunning = useWatch(store, "runState", (state) => state === "running", []);
+  const progress = 50; // Example progress calculation
 
-export function StatusBar({
-  isRunning = false,
-  progress = 0,
-  operationCount = 0,
-  onStart,
-  onCancel,
-}: StatusBarProps) {
+  const onStart = useCallback(() => {
+    patch(store, { runState: "starting" });
+  }, [store]);
+
+  const onCancel = useCallback(() => {
+    patch(store, { runState: "canceling" });
+  }, [store]);
+
   return (
     <div className="bg-white border-t border-gray-300 px-6 py-4 shadow-sm">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -26,26 +27,23 @@ export function StatusBar({
               Operations: {operationCount.toLocaleString()}
             </span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2.5">
-            <div
-              className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
-              style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-            />
-          </div>
+          <progress
+            className="w-full h-2.5 appearance-none rounded-full overflow-hidden [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:bg-blue-600"
+            value={Math.min(100, Math.max(0, progress))}
+            max="100"
+          />
         </div>
 
         {/* Control Buttons */}
-        <div className="flex gap-2">
-          {!isRunning ? (
-            <Button variant="primary" onClick={onStart}>
-              Start
-            </Button>
-          ) : (
-            <Button variant="danger" onClick={onCancel}>
-              Cancel
-            </Button>
-          )}
-        </div>
+        {!isRunning ? (
+          <Button className="w-24" variant="primary" onClick={onStart}>
+            Start
+          </Button>
+        ) : (
+          <Button className="w-24" variant="danger" onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
       </div>
     </div>
   );

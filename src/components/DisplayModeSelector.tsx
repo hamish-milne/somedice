@@ -1,11 +1,7 @@
-import { Button } from "./Button";
+import { formRadio, useStore } from "tinystate";
+import { RadioButton } from "./Button";
 
 type DisplayMode = "probability" | "cumulative" | "individual" | "documentation";
-
-interface DisplayModeSelectorProps {
-  mode?: DisplayMode;
-  onModeChange?: (mode: DisplayMode) => void;
-}
 
 const modes: { value: DisplayMode; label: string }[] = [
   { value: "probability", label: "Probability" },
@@ -14,27 +10,26 @@ const modes: { value: DisplayMode; label: string }[] = [
   { value: "documentation", label: "Documentation" },
 ];
 
-export function DisplayModeSelector({
-  mode = "probability",
-  onModeChange,
-}: DisplayModeSelectorProps) {
+export function DisplayModeSelector() {
+  const store = useStore();
   return (
     <div className="bg-gray-50 border-b border-gray-300 px-6 py-3">
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-semibold text-gray-700 mr-2">Display Mode:</span>
+      <fieldset className="appearance-none flex items-center gap-2">
+        <span className="text-sm font-semibold text-gray-700 mr-2">
+          <legend>Display Mode</legend>
+        </span>
         <div className="flex gap-1">
           {modes.map((m) => (
-            <Button
+            <RadioButton
               key={m.value}
-              variant={mode === m.value ? "primary" : "secondary"}
-              onClick={() => onModeChange?.(m.value)}
-              className="text-sm px-3 py-1"
+              className="text-sm px-3 py-1 has-checked:bg-blue-600! has-checked:text-white!"
+              {...formRadio(store, "displayMode", m.value)}
             >
               {m.label}
-            </Button>
+            </RadioButton>
           ))}
         </div>
-      </div>
+      </fieldset>
     </div>
   );
 }

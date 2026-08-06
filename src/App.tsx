@@ -8,7 +8,8 @@ import { ErrorView } from "./components/ErrorView";
 import { DocumentationView } from "./components/DocumentationView";
 import Runner from "./lib/runner?worker";
 import type { Output } from "./lib/vm";
-import { useCreateStore, useWatch } from "tinystate";
+import { listen, patch, peek, StoreProvider, useStore, useWatch, type AppStore } from "tinystate";
+import type { InputMessage, OutputMessage } from "./lib/runner";
 
 type DisplayMode = "probability" | "cumulative" | "individual" | "documentation";
 
@@ -20,37 +21,90 @@ declare global {
     displayMode: DisplayMode;
     inputCode: string;
     outputs: Output[];
-    runState: "idle" | "running" | "error";
+    runState: "idle" | "running" | "error" | "starting" | "canceling";
     error: string;
     opCount: number;
   }
 }
 
+const initialState: AppState = {
+  displayMode: "probability",
+  inputCode: "",
+  outputs: [],
+  runState: "idle",
+  error: "",
+  opCount: 0,
+};
+
 export default function App() {
+  return (
+    <StoreProvider value={initialState}>
+      <Main />
+    </StoreProvider>
+  );
+}
+
+function createRunnerWorker(store: AppStore) {
+  const runner = new Runner();
+  runner.onmessage = (event) => {
+    const msg = event.data as OutputMessage;
+    console.log(msg);
+    switch (msg.type) {
+      case "error":
+        patch(store, { runState: "error", error: msg.message });
+        break;
+      case "progress":
+        patch(store, { runState: "running", opCount: msg.opCount });
+        break;
+      case "result":
+        patch(store, { runState: "idle", outputs: msg.outputs });
+        break;
+    }
+  };
+  return runner;
+}
+
+function RunnerManager() {
+  const store = useStore();
   const runner = useRef<Worker>(null);
   useEffect(() => {
-    runner.current = new Runner();
-    runner.current.onmessage = (event) => {
-      console.log("Message from worker:", event.data);
-    };
+    runner.current = createRunnerWorker(store);
     return () => {
       runner.current?.terminate();
     };
   }, []);
 
-  const store = useCreateStore<AppState, true>({
-    displayMode: "probability",
-    inputCode: "",
-    outputs: [],
-    runState: "idle",
-    error: "",
-    opCount: 0,
-  });
+  useEffect(
+    () =>
+      listen(store, "runState", (state) => {
+        console.log("Run state changed to:", state);
+        switch (state) {
+          case "starting":
+            runner.current?.postMessage({
+              type: "run",
+              programText: peek(store, "inputCode"),
+            } satisfies InputMessage);
+            break;
+          case "canceling":
+            runner.current?.terminate();
+            runner.current = createRunnerWorker(store);
+            patch(store, { runState: "idle" });
+            break;
+        }
+      }),
+    [],
+  );
 
+  return null;
+}
+
+function Main() {
+  const store = useStore();
   const displayMode = useWatch(store, "displayMode");
 
   return (
     <div className="h-screen flex flex-col bg-gray-100">
+      <RunnerManager />
       {/* Header */}
       <Header />
 

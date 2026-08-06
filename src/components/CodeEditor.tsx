@@ -11,7 +11,9 @@ export function CodeEditor({ placeholder = "Enter your dice code here..." }: Cod
   return (
     <div className="h-full flex flex-col">
       <div className="bg-gray-100 px-4 py-2 border-b border-gray-300">
-        <h2 className="text-sm font-semibold text-gray-700">Code Editor</h2>
+        <label htmlFor="inputCode" className="text-sm font-semibold text-gray-700">
+          Code Editor
+        </label>
       </div>
       <textarea
         spellCheck={false}
