@@ -7,8 +7,18 @@ import { ChartArea } from "./components/ChartArea";
 import { ErrorView } from "./components/ErrorView";
 import { DocumentationView } from "./components/DocumentationView";
 import Runner from "./lib/runner?worker";
-import type { Output } from "./lib/vm";
-import { listen, patch, peek, StoreProvider, useStore, useWatch, type AppStore } from "tinystate";
+import type { Output } from "./lib/common";
+import {
+  createStore,
+  listen,
+  patch,
+  peek,
+  StoreProvider,
+  useStore,
+  useWatch,
+  type AppStore,
+} from "tinystate";
+import { syncStorage } from "tinystate/utils";
 import type { InputMessage, OutputMessage } from "./lib/runner";
 
 type DisplayMode = "probability" | "cumulative" | "individual" | "documentation";
@@ -38,7 +48,13 @@ const initialState: AppState = {
 
 export default function App() {
   return (
-    <StoreProvider value={initialState}>
+    <StoreProvider
+      value={() => {
+        const store = createStore(initialState);
+        syncStorage(store, localStorage, "appState");
+        return store;
+      }}
+    >
       <Main />
     </StoreProvider>
   );
