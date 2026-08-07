@@ -5,6 +5,8 @@ import {
   UNARY_OPERATOR,
   type Program,
   type Location,
+  BaseError,
+  type DebugFrame,
 } from "./common";
 
 const { freeze, values, entries, fromEntries } = Object;
@@ -103,11 +105,6 @@ const PATTERN_COMMENT = /\\[^\\]*\\/y;
 
 type Token = readonly [token: number, value: string, location: Location];
 
-function locationToString(location: Location): string {
-  const [line, column] = location;
-  return `line ${line + 1}, column ${column + 1}`;
-}
-
 type ParserState = {
   input: string;
   position: number;
@@ -120,30 +117,35 @@ type ParserState = {
   functions: [name: (string | null)[], ptr: number][];
   outputNames: string[][];
   code: number[];
-  codeLocations: Location[];
+  debugLocations: Location[];
+  debugFrames: DebugFrame[];
 };
 
 function pushCode(state: ParserState, ...args: number[]): void {
   state.code.push(...args);
   for (let i = 0; i < args.length; i++) {
-    state.codeLocations.push(state.location);
+    state.debugLocations.push(state.location);
   }
 }
 
-class SyntaxError extends Error {
-  declare token: Token;
-  declare context: string;
+class SyntaxError extends BaseError {
   constructor(token: Token, context: string) {
     const [, value, location] = token;
-    super(`Syntax error at ${locationToString(location)}: '${value}' was unexpected ${context}`);
-    this.token = token;
-    this.context = context;
+    super(`'${value}' was unexpected ${context}`, [{ location, variables: [], functionName: "" }]);
+  }
+
+  override errorType() {
+    return "syntax" as const;
   }
 }
 
-class CompilerError extends Error {
+class CompilerError extends BaseError {
   constructor(state: ParserState, message: string) {
-    super(`Compiler error at ${locationToString(state.location)}: ${message}`);
+    super(message, [{ location: state.location, variables: [], functionName: "" }]);
+  }
+
+  override errorType() {
+    return "compiler" as const;
   }
 }
 
@@ -366,7 +368,7 @@ function pushOperator(state: ParserState, ops: [Operator, Location][], op: Opera
   while (ops.length > 0 && operatorPrecedence[ops[ops.length - 1][0]] <= operatorPrecedence[op]) {
     const [op, location] = ops.pop()!;
     state.code.push(op);
-    state.codeLocations.push(location);
+    state.debugLocations.push(location);
   }
   ops.push([op, state.location]);
 }
@@ -395,7 +397,7 @@ function parseExpression(state: ParserState): void {
   while (ops.length > 0) {
     const [op, location] = ops.pop()!;
     state.code.push(op);
-    state.codeLocations.push(location);
+    state.debugLocations.push(location);
   }
 }
 
@@ -460,6 +462,15 @@ function parseLoop(state: ParserState) {
     parseBlock(state);
     pushCode(state, OPCODE.JUMP, loopStartIdx - code.length - 2); // Jump back to loop start
   });
+}
+
+function pushDebugFrame(
+  state: ParserState,
+  functionName: string,
+  fromPc: number,
+  variables: string[],
+): void {
+  state.debugFrames.push([fromPc, state.code.length, functionName, variables]);
 }
 
 function parseFunction(state: ParserState) {
@@ -529,6 +540,7 @@ function parseFunction(state: ParserState) {
     parseBlock(state);
     state.code[reserveIdx] = state.locals.length - parameterNames.length; // Update reserved space for local variables
     pushCode(state, OPCODE.SEQUENCE, 0, OPCODE.RETURN); // Ensure function always returns a value
+    pushDebugFrame(state, functionName.map((x) => x ?? "?").join(" "), functionPtr, parameterNames);
   });
   state.locals = undefined;
 }
@@ -656,20 +668,24 @@ export function parseProgram(input: string): Program {
     locals: undefined,
     functions: [],
     outputNames: [],
-    code: [OPCODE.RESERVE, PLACEHOLDER], // Reserve space for global variables
-    codeLocations: [],
+    code: [],
+    debugLocations: [],
+    debugFrames: [],
     backtrack: [],
   };
+  pushCode(state, OPCODE.RESERVE, PLACEHOLDER); // Reserve space for global variables
   parseStatements(state);
   const token = nextToken(state);
   if (token[0] !== TOKEN.EOF) {
     throw new SyntaxError(token, "in the main program body");
   }
   state.code[1] = state.globals.length; // Update reserved space for global variables
+  pushDebugFrame(state, "(globals)", 0, state.globals);
   return {
     code: state.code,
     outputNames: state.outputNames,
-    codeLocations: state.codeLocations,
+    debugLocations: state.debugLocations,
+    debugFrames: state.debugFrames,
   };
 }
 

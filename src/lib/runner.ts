@@ -1,16 +1,31 @@
 /// <reference lib="webworker" />
-import type { Output } from "./common";
+import { BaseError, type DebugInfo, type Output } from "./common";
 import { parseProgram } from "./parser";
-import { execute, type ProgramState } from "./vm";
+import { execute, getDebugInfo, type ProgramState } from "./vm";
 
 export type InputMessage = { type: "run"; programText: string };
 
 export type OutputMessage =
-  | { type: "error"; message: string }
+  | {
+      type: "error";
+      errorType: "syntax" | "compiler" | "runtime" | "unknown";
+      message: string;
+      debugInfo: DebugInfo[];
+    }
   | { type: "progress"; opCount: number; pcMax: number; programSize: number }
   | { type: "result"; outputs: Output[]; opCount: number };
 
 const OPS_PER_PROGRESS_UPDATE = 1000;
+
+class RuntimeError extends BaseError {
+  constructor(message: string, debugInfo: DebugInfo[]) {
+    super(message, debugInfo);
+  }
+
+  override errorType() {
+    return "runtime" as const;
+  }
+}
 
 export function* runProgram(programText: string): Generator<OutputMessage, void, unknown> {
   try {
@@ -27,20 +42,35 @@ export function* runProgram(programText: string): Generator<OutputMessage, void,
       opCount: 0,
     };
 
-    while (!execute(state, outputs, state.opCount + OPS_PER_PROGRESS_UPDATE)) {
-      yield {
-        type: "progress",
-        opCount: state.opCount,
-        pcMax: state.pcMax,
-        programSize: state.program.code.length,
-      };
+    try {
+      while (!execute(state, outputs, state.opCount + OPS_PER_PROGRESS_UPDATE)) {
+        yield {
+          type: "progress",
+          opCount: state.opCount,
+          pcMax: state.pcMax,
+          programSize: state.program.code.length,
+        };
+      }
+    } catch (e) {
+      console.error(e);
+      let debugInfo: DebugInfo[];
+      let message: string;
+      try {
+        debugInfo = getDebugInfo(state);
+        message = e instanceof Error ? e.message : String(e);
+      } catch (e1) {
+        console.error(e1);
+        throw e;
+      }
+      throw new RuntimeError(message, debugInfo);
     }
     yield { type: "result", outputs, opCount: state.opCount };
   } catch (e) {
-    if (e instanceof Error) {
-      yield { type: "error", message: e.message };
+    if (e instanceof BaseError) {
+      yield { type: "error", errorType: e.errorType(), message: e.message, debugInfo: e.debugInfo };
     } else {
-      yield { type: "error", message: "An unknown error occurred." };
+      console.error(e);
+      yield { type: "error", errorType: "unknown", message: String(e), debugInfo: [] };
     }
   }
 }

@@ -1,24 +1,45 @@
-interface ErrorViewProps {
-  title?: string;
-  description?: string;
-  codeSnippet?: string;
-  errorLine?: number;
-}
+import { useStore, useWatch } from "tinystate";
+import { valueToString } from "../lib/common";
 
-export function ErrorView({
-  title = "Syntax Error",
-  description = "Unexpected token in expression. Expected a number or variable name.",
-  codeSnippet = `output "damage" 1d6 + 2d4
-loop x over 1..10
-  result x * invalid_token
-end`,
-  errorLine = 3,
-}: ErrorViewProps) {
-  const lines = codeSnippet.split("\n");
+const ERROR_TITLES = {
+  syntax: "Syntax Error",
+  compiler: "Compilation Error",
+  runtime: "Runtime Error",
+  unknown: "Unknown Error",
+};
+
+const ERROR_CONTEXT = 3; // Number of lines of context to show around the error line
+
+export function ErrorView() {
+  const store = useStore();
+  const inputCode = useWatch(store, "inputCode");
+  const error = useWatch(store, "error");
+
+  if (!error) {
+    return (
+      <div className="h-full flex items-center justify-center bg-white">
+        <p className="text-gray-500">No error to display</p>
+      </div>
+    );
+  }
+
+  const { errorType, message, debugInfo } = error;
+  const lines = inputCode.split("\n");
+  const title = ERROR_TITLES[errorType] || "Error";
+
+  // Get the primary error location (most recent frame)
+  const primaryLocation = debugInfo[0]?.location;
+  const errorLine = primaryLocation ? primaryLocation[0] : null;
+  const errorColumn = primaryLocation ? primaryLocation[1] : null;
+
+  const snippetStart = errorLine !== null ? Math.max(0, errorLine - ERROR_CONTEXT) : 0;
+  const snippetEnd =
+    errorLine !== null ? Math.min(lines.length, errorLine + ERROR_CONTEXT + 1) : lines.length;
+  const snippetLines = lines.slice(snippetStart, snippetEnd);
 
   return (
-    <div className="h-full flex flex-col bg-white p-6">
-      <div className="max-w-3xl mx-auto w-full">
+    <div className="h-full overflow-auto bg-white p-6">
+      <div className="max-w-4xl mx-auto w-full">
         {/* Error Header */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
@@ -39,78 +60,110 @@ end`,
             </div>
             <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
           </div>
-          <p className="text-gray-600 ml-13">{description}</p>
+          <p className="text-gray-600 ml-13">{message}</p>
         </div>
 
         {/* Code Snippet with Error Highlight */}
-        <div className="bg-gray-50 rounded-lg border-2 border-red-200 overflow-hidden">
-          <div className="bg-gray-800 text-gray-300 px-4 py-2 text-sm font-semibold">
-            Code Snippet
-          </div>
-          <div className="font-mono text-sm">
-            {lines.map((line, index) => {
-              const lineNumber = index + 1;
-              const isErrorLine = lineNumber === errorLine;
+        {errorLine !== null && (
+          <div className="bg-gray-50 rounded-lg border-2 border-red-200 overflow-hidden mb-6">
+            <div className="bg-gray-800 text-gray-300 px-4 py-2 text-sm font-semibold flex justify-between items-center">
+              <span>Code Snippet</span>
+              {errorColumn !== null && (
+                <span className="text-xs">
+                  Line {errorLine + 1}, Column {errorColumn + 1}
+                </span>
+              )}
+            </div>
+            <div className="font-mono text-sm">
+              {snippetLines.map((line, index) => {
+                const lineNumber = snippetStart + index;
+                const isErrorLine = lineNumber === errorLine;
 
-              return (
-                <div
-                  key={index}
-                  className={`flex ${isErrorLine ? "bg-red-50" : ""} hover:bg-gray-100`}
-                >
-                  {/* Line Number */}
+                return (
                   <div
-                    className={`select-none px-4 py-2 text-right min-w-12 ${
-                      isErrorLine
-                        ? "bg-red-200 text-red-900 font-bold"
-                        : "bg-gray-100 text-gray-500"
-                    }`}
+                    key={index}
+                    className={`flex ${isErrorLine ? "bg-red-50" : ""} hover:bg-gray-100`}
                   >
-                    {lineNumber}
-                  </div>
+                    {/* Line Number */}
+                    <div
+                      className={`select-none px-4 py-2 text-right min-w-12 ${
+                        isErrorLine
+                          ? "bg-red-200 text-red-900 font-bold"
+                          : "bg-gray-100 text-gray-500"
+                      }`}
+                    >
+                      {lineNumber + 1}
+                    </div>
 
-                  {/* Code Line */}
-                  <div className="flex-1 px-4 py-2 relative">
-                    {isErrorLine && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500" />
-                    )}
-                    <span className={isErrorLine ? "text-gray-900" : "text-gray-700"}>
-                      {line || " "}
-                    </span>
-                    {isErrorLine && (
-                      <span className="ml-2 text-red-600 font-bold">← Error here</span>
-                    )}
+                    {/* Code Line */}
+                    <div className="flex-1 px-4 py-2 relative">
+                      {isErrorLine && (
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500" />
+                      )}
+                      <span className={isErrorLine ? "text-gray-900" : "text-gray-700"}>
+                        {line || " "}
+                      </span>
+                      {isErrorLine && errorColumn !== null && (
+                        <div className="mt-1">
+                          <span className="text-red-600 whitespace-pre">
+                            {" ".repeat(Math.max(0, errorColumn))}↑ Error here
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Additional Info */}
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <div className="flex gap-2">
-            <svg
-              className="w-5 h-5 text-blue-600 shrink-0 mt-0.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <div className="text-sm text-blue-900">
-              <p className="font-semibold mb-1">Suggestion</p>
-              <p className="text-blue-800">
-                Check your syntax at line {errorLine}. Make sure all variable names are valid and
-                all expressions are properly formatted.
-              </p>
+                );
+              })}
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Stack Trace */}
+        {debugInfo.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Stack Trace</h3>
+            <div className="space-y-3">
+              {debugInfo.map((frame, index) => (
+                <div key={index} className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                      <span className="text-xs font-semibold text-gray-600">{index + 1}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 mb-1">
+                        <span className="font-semibold text-gray-900">
+                          {frame.functionName || "(global)"}
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          at line {frame.location[0] + 1}, column {frame.location[1] + 1}
+                        </span>
+                      </div>
+
+                      {/* Variables */}
+                      {frame.variables.length > 0 && (
+                        <div className="mt-2">
+                          <div className="text-xs font-semibold text-gray-600 mb-1">Variables:</div>
+                          <div className="bg-white rounded border border-gray-200 p-2">
+                            <div className="grid grid-cols-1 gap-1 font-mono text-xs">
+                              {frame.variables.map(([name, value], varIndex) => (
+                                <div key={varIndex} className="flex gap-2">
+                                  <span className="text-blue-600 font-semibold">{name}:</span>
+                                  <span className="text-gray-700 break-all">
+                                    {valueToString(value)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

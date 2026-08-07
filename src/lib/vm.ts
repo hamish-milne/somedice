@@ -1,12 +1,15 @@
 import {
   KIND,
   OPCODE,
+  valueToString,
   type Collection,
   type CollectionItem,
+  type DebugInfo,
   type Die,
   type DieItem,
   type Output,
   type Program,
+  type ProgramValue,
   type Sequence,
 } from "./common";
 
@@ -38,8 +41,6 @@ function collection(count: number, die: Die): Collection {
 function totalWeight(d: Die): number {
   return d.reduce((acc, [, count]) => acc + count, 0);
 }
-
-type ProgramValue = number | Sequence | Die | Collection;
 
 function checkResult(value: number) {
   if (value > Number.MAX_SAFE_INTEGER || value < Number.MIN_SAFE_INTEGER) {
@@ -80,7 +81,18 @@ function numberOperation(op: number, a: number, b: number): number {
     case OPCODE.OR:
       return a || b ? 1 : 0;
     default:
-      throw new Error();
+      throw new Error(`Unknown binary operator ${op}`);
+  }
+}
+
+function numberUnaryOperation(op: number, a: number): number {
+  switch (op) {
+    case OPCODE.UNARY_MINUS:
+      return -a;
+    case OPCODE.NOT:
+      return a ? 0 : 1;
+    default:
+      throw new Error(`Unknown unary operator ${op}`);
   }
 }
 
@@ -230,8 +242,6 @@ function getAllSequences([n, d]: Collection): CollectionItem[] {
   }
 
   recurse(0, n, 1, 1);
-  console.log(results.length);
-  console.log(fact);
   return results;
 }
 
@@ -330,6 +340,15 @@ function numberDieOperation(op: number, a: number, b: Die, reverse: boolean): Di
   return die(dieMapFinish(resultMap));
 }
 
+function dieUnaryOperation(op: number, d: Die): Die {
+  const resultMap = dieMap();
+  for (const [value, count] of d) {
+    const newValue = numberUnaryOperation(op, value);
+    dieMapAdd(resultMap, newValue, count);
+  }
+  return die(dieMapFinish(resultMap));
+}
+
 function pop(stack: ProgramValue[]): ProgramValue {
   const value = stack.pop();
   if (value == null) {
@@ -362,47 +381,30 @@ export type ProgramState = {
   opCount: number;
 };
 
-const MAX_STRING_ITEMS = 10;
-
-function valueToString(value: ProgramValue): string {
-  if (typeof value === "number") {
-    return value.toString();
-  }
-  const ellipsis = value.length > MAX_STRING_ITEMS ? ",..." : "";
-  switch (value.kind) {
-    case KIND.SEQUENCE:
-      return `[${value.slice(0, MAX_STRING_ITEMS).join(",")}${ellipsis}]`;
-    case KIND.DIE:
-      return `{${value
-        .slice(0, MAX_STRING_ITEMS)
-        .map(([v, c]) => `${v}:${c}`)
-        .join(",")}${ellipsis}}`;
-    case KIND.COLLECTION:
-      return `${value[1]}d${valueToString(value[0])}`;
-  }
-}
-
 const MAX_STACK_SIZE = 10000;
 
 export function execute(state: ProgramState, outputs: Output[], maxOps: number): boolean {
   const { program, stack } = state;
   const { code } = program;
-  let { pc, fp } = state;
+
+  function readPc() {
+    return code[state.pc++];
+  }
+
   for (; state.opCount < maxOps; state.opCount++) {
-    if (pc > state.pcMax) {
-      state.pcMax = pc;
+    if (state.pc > state.pcMax) {
+      state.pcMax = state.pc;
     }
-    if (pc >= code.length) {
-      state.pc = pc;
+    if (state.pc >= code.length) {
       return true;
     }
     if (stack.length > MAX_STACK_SIZE) {
       throw new Error("Stack overflow");
     }
-    const opcode = code[pc++];
+    const opcode = readPc();
     switch (opcode) {
       case OPCODE.IMMEDIATE: {
-        const value = code[pc++];
+        const value = readPc();
         stack.push(value);
         break;
       }
@@ -427,6 +429,16 @@ export function execute(state: ProgramState, outputs: Output[], maxOps: number):
           stack.push(numberDieOperation(opcode, a, b as Die, false));
         } else if (typeof b === "number") {
           stack.push(numberDieOperation(opcode, b, a, true));
+        }
+        break;
+      }
+      case OPCODE.UNARY_MINUS:
+      case OPCODE.NOT: {
+        const a = valueToNumberOrDie(pop(stack));
+        if (typeof a === "number") {
+          stack.push(numberUnaryOperation(opcode, a));
+        } else {
+          stack.push(dieUnaryOperation(opcode, a));
         }
         break;
       }
@@ -494,7 +506,7 @@ export function execute(state: ProgramState, outputs: Output[], maxOps: number):
         break;
       }
       case OPCODE.SEQUENCE: {
-        const count = code[pc++];
+        const count = readPc();
         const seq: number[] = [];
         for (let i = 0; i < count; i++) {
           const entry = valueToNewSequence(pop(stack));
@@ -509,48 +521,49 @@ export function execute(state: ProgramState, outputs: Output[], maxOps: number):
         break;
       }
       case OPCODE.G_LOAD: {
-        const index = code[pc++];
+        const index = readPc();
         stack.push(stack[index]);
         break;
       }
       case OPCODE.G_STORE: {
-        const index = code[pc++];
+        const index = readPc();
         stack[index] = pop(stack);
         break;
       }
       case OPCODE.L_LOAD: {
-        const index = code[pc++];
-        stack.push(stack[fp + index]);
+        const index = readPc();
+        stack.push(stack[state.fp + index]);
         break;
       }
       case OPCODE.L_STORE: {
-        const index = code[pc++];
-        stack[fp + index] = pop(stack);
+        const index = readPc();
+        stack[state.fp + index] = pop(stack);
         break;
       }
       case OPCODE.JUMP: {
-        const target = code[pc++];
-        pc += target;
+        const target = readPc();
+        state.pc += target;
         break;
       }
       case OPCODE.JUMP_IF_FALSE: {
-        const target = code[pc++];
+        const target = readPc();
         const condition = valueToNumber(pop(stack));
         if (!condition) {
-          pc += target;
+          state.pc += target;
         }
         break;
       }
       case OPCODE.FUNCTION: {
-        const paramCount = code[pc++];
-        if (paramCount != stack.length - fp) {
+        const paramCount = readPc();
+        if (paramCount != stack.length - state.fp) {
           throw new Error(
-            `Function call parameter count mismatch: expected ${paramCount}, got ${stack.length - fp}`,
+            `Function call parameter count mismatch: expected ${paramCount}, got ${stack.length - state.fp}`,
           );
         }
         const dieCall: boolean[] = Array(paramCount).fill(false);
         for (let i = 0; i < paramCount; i++) {
-          const paramKind = code[pc++] as KIND;
+          const paramKind = readPc() as KIND;
+          const { fp } = state;
           const arg = stack[fp + i];
           switch (paramKind) {
             case KIND.NUMBER:
@@ -585,19 +598,19 @@ export function execute(state: ProgramState, outputs: Output[], maxOps: number):
         break;
       }
       case OPCODE.CALL: {
-        const argCount = code[pc++];
-        const functionPtr = code[pc++];
+        const argCount = readPc();
+        const functionPtr = readPc();
         // Save the frame pointer and return address
-        stack.splice(stack.length - argCount, 0, pc, fp);
-        fp = stack.length - argCount;
-        pc = functionPtr; // Jump to the function
+        stack.splice(stack.length - argCount, 0, state.pc, state.fp);
+        state.fp = stack.length - argCount;
+        state.pc = functionPtr; // Jump to the function
         break;
       }
       case OPCODE.RETURN: {
         const value = pop(stack);
-        stack.length = fp; // Clear the stack to the frame pointer
-        fp = popNumber(stack); // Restore the previous frame pointer
-        pc = popNumber(stack); // Restore the instruction pointer
+        stack.length = state.fp; // Clear the stack to the frame pointer
+        state.fp = popNumber(stack); // Restore the previous frame pointer
+        state.pc = popNumber(stack); // Restore the instruction pointer
         stack.push(value); // Push the return value onto the stack
         break;
       }
@@ -610,31 +623,31 @@ export function execute(state: ProgramState, outputs: Output[], maxOps: number):
         break;
       }
       case OPCODE.LOOP_START: {
-        const loopEnd = code[pc++];
+        const loopEnd = readPc();
         const loopIndex = popNumber(stack);
         const sequence = stack[stack.length - 1];
         if (typeof sequence === "number" || sequence.kind !== KIND.SEQUENCE) {
-          throw new Error();
+          throw new Error("Expected a sequence for loop");
         }
         if (loopIndex < sequence.length) {
           stack.push(loopIndex + 1); // Increment loop index
           stack.push(sequence[loopIndex]); // Push current value
         } else {
           stack.pop(); // Pop the sequence
-          pc += loopEnd; // Jump to loop end
+          state.pc += loopEnd; // Jump to loop end
         }
         break;
       }
       case OPCODE.RESERVE: {
-        const count = code[pc++];
+        const count = readPc();
         for (let i = 0; i < count; i++) {
           stack.push(0);
         }
         break;
       }
       case OPCODE.OUTPUT: {
-        const varCount = code[pc++];
-        const outputNames = varCount === -1 ? null : [...program.outputNames[code[pc++]]];
+        const varCount = readPc();
+        const outputNames = varCount === -1 ? null : [...program.outputNames[readPc()]];
 
         let finalName = "";
         if (outputNames) {
@@ -658,12 +671,33 @@ export function execute(state: ProgramState, outputs: Output[], maxOps: number):
         break;
       }
       default:
-        throw new Error(`Unknown opcode ${opcode} at instruction pointer ${pc - 1}`);
+        throw new Error(`Unknown opcode ${opcode}`);
     }
   }
-  state.pc = pc;
-  state.fp = fp;
   return false;
+}
+
+export function getDebugInfo(state: ProgramState): DebugInfo[] {
+  const result: DebugInfo[] = [];
+  let fp = state.fp;
+  let pc = state.pc;
+  while (true) {
+    const [, , functionName, variables] = state.program.debugFrames.find(
+      ([fromPc, toPc]) => pc >= fromPc && pc < toPc,
+    ) ?? [0, 0, "(unknown)", []];
+    const frameVariables = variables.map((name, index) => [name, state.stack[fp + index]] as const);
+    result.push({
+      location: state.program.debugLocations[pc - 1] ?? [-1, -1],
+      functionName,
+      variables: frameVariables,
+    });
+    if (fp <= 0) {
+      break;
+    }
+    pc = state.stack[fp - 2] as number;
+    fp = state.stack[fp - 1] as number;
+  }
+  return result;
 }
 
 if (import.meta.vitest) {
@@ -672,7 +706,8 @@ if (import.meta.vitest) {
   function runCode(code: number[], expectedOutput: Die | number) {
     const program: Program = {
       code,
-      codeLocations: [],
+      debugLocations: [],
+      debugFrames: [],
       outputNames: [],
     };
     const state: ProgramState = {
@@ -718,6 +753,7 @@ if (import.meta.vitest) {
     G_LOAD,
     G_STORE,
     JUMP,
+    UNARY_MINUS,
   } = OPCODE;
 
   suite("opcodes", () => {
@@ -887,6 +923,10 @@ if (import.meta.vitest) {
           [3, 1],
         ]),
       );
+    });
+
+    test("UNARY_MINUS", () => {
+      runCode([IMMEDIATE, 5, UNARY_MINUS, OUTPUT, -1], -5);
     });
 
     test("AT", () => {

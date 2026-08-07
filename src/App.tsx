@@ -7,7 +7,7 @@ import { ChartArea } from "./components/ChartArea";
 import { ErrorView } from "./components/ErrorView";
 import { DocumentationView } from "./components/DocumentationView";
 import Runner from "./lib/runner?worker";
-import type { Output } from "./lib/common";
+import type { DebugInfo, Output } from "./lib/common";
 import {
   createStore,
   listen,
@@ -23,16 +23,18 @@ import type { InputMessage, OutputMessage } from "./lib/runner";
 
 export type DisplayMode = "exactly" | "atLeast" | "atMost" | "documentation";
 
-// Toggle this to test error view
-const HAS_ERROR = false;
-
 declare global {
   interface AppState {
     displayMode: DisplayMode;
     inputCode: string;
     outputs: Output[];
     runState: "idle" | "running" | "error" | "starting" | "canceling";
-    error: string;
+    displayState: "output" | "error";
+    error: {
+      errorType: "syntax" | "compiler" | "runtime" | "unknown";
+      message: string;
+      debugInfo: DebugInfo[];
+    };
     opCount: number;
     pcMax: number;
     programSize: number;
@@ -44,7 +46,8 @@ const initialState: AppState = {
   inputCode: "",
   outputs: [],
   runState: "idle",
-  error: "",
+  displayState: "output",
+  error: { errorType: "unknown", message: "", debugInfo: [] },
   opCount: 0,
   pcMax: 0,
   programSize: 1,
@@ -68,10 +71,17 @@ function createRunnerWorker(store: AppStore) {
   const runner = new Runner();
   runner.onmessage = (event) => {
     const msg = event.data as OutputMessage;
-    console.log(msg);
     switch (msg.type) {
       case "error":
-        patch(store, { runState: "error", error: msg.message });
+        patch(store, {
+          runState: "error",
+          displayState: "error",
+          error: {
+            errorType: msg.errorType,
+            message: msg.message,
+            debugInfo: msg.debugInfo,
+          },
+        });
         break;
       case "progress":
         patch(store, {
@@ -84,6 +94,7 @@ function createRunnerWorker(store: AppStore) {
       case "result":
         patch(store, {
           runState: "idle",
+          displayState: "output",
           outputs: msg.outputs,
           pcMax: peek(store, "programSize"),
           opCount: msg.opCount,
@@ -131,6 +142,7 @@ function RunnerManager() {
 function Main() {
   const store = useStore();
   const displayMode = useWatch(store, "displayMode");
+  const displayState = useWatch(store, "displayState");
 
   return (
     <div className="h-full min-w-85 flex flex-col bg-gray-100">
@@ -149,12 +161,12 @@ function Main() {
         <div className="flex flex-col h-1/2 lg:h-full lg:min-h-0">
           <DisplayModeSelector />
           <div className="flex-1 overflow-auto min-h-0">
-            {HAS_ERROR ? (
-              <ErrorView />
-            ) : displayMode === "documentation" ? (
+            {displayMode === "documentation" ? (
               <DocumentationView />
-            ) : (
+            ) : displayState === "output" ? (
               <ChartArea />
+            ) : (
+              <ErrorView />
             )}
           </div>
         </div>

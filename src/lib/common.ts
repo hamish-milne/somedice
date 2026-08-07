@@ -63,11 +63,18 @@ export const KIND = freeze({
 export type KIND = ValueOf<typeof KIND>;
 
 export type Location = readonly [line: number, column: number];
+export type DebugFrame = readonly [
+  fromPc: number,
+  toPc: number,
+  functionName: string,
+  variables: readonly string[],
+];
 
 export type Program = {
   code: number[];
-  codeLocations: Location[];
   outputNames: string[][];
+  debugLocations: Location[];
+  debugFrames: readonly DebugFrame[];
 };
 
 export type Sequence = readonly number[] & { readonly kind: typeof KIND.SEQUENCE };
@@ -77,5 +84,42 @@ export type CollectionItem = readonly [sequence: Sequence, count: number];
 export type Collection = readonly [count: number, die: Die] & {
   readonly kind: typeof KIND.COLLECTION;
 };
+export type ProgramValue = number | Sequence | Die | Collection;
+
+const MAX_STRING_ITEMS = 10;
+
+export function valueToString(value: ProgramValue): string {
+  if (typeof value === "number") {
+    return value.toString();
+  }
+  const ellipsis = value.length > MAX_STRING_ITEMS ? ",..." : "";
+  switch (value.kind) {
+    case KIND.SEQUENCE:
+      return `[${value.slice(0, MAX_STRING_ITEMS).join(",")}${ellipsis}]`;
+    case KIND.DIE:
+      return `{${value
+        .slice(0, MAX_STRING_ITEMS)
+        .map(([v, c]) => `${v}:${c}`)
+        .join(",")}${ellipsis}}`;
+    case KIND.COLLECTION:
+      return `${value[0]}d${valueToString(value[1])}`;
+  }
+}
 
 export type Output = [name: string, value: Die];
+
+export type DebugInfo = {
+  location: Location;
+  functionName: string;
+  variables: readonly (readonly [name: string, value: ProgramValue])[];
+};
+
+export abstract class BaseError extends Error {
+  declare debugInfo: DebugInfo[];
+  constructor(message: string, debugInfo: DebugInfo[]) {
+    super(message);
+    this.debugInfo = debugInfo;
+  }
+
+  abstract errorType(): "syntax" | "compiler" | "runtime";
+}

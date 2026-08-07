@@ -6,15 +6,15 @@ Misc:
   ✔ Encode argcount in OPCODE.CALL; in FUNCTION use fp to recover it @done(26-08-07 17:05)
 Frontend:
   ✔ Calculate progress with PC/PCMax @done(26-08-07 16:56)
-  ☐ Show errors
+  ✔ Show errors @done(26-08-07 18:25)
   ✔ Display modes @done(26-08-07 16:35)
 VM:
-  ☐ RuntimeError (common Error class for location?)
-  ☐ Get location from codeLocations
-  ☐ Stack unwinding (multiple locations for error)
+  ✔ RuntimeError (common Error class for location?) @done(26-08-07 18:25)
+  ✔ Get location from codeLocations @done(26-08-07 18:25)
+  ✔ Stack unwinding (multiple locations for error) @done(26-08-07 18:25)
 Debug variable values:
-  ☐ Parser: track each block (global or function), function name, array of variable names (starting at FP), PC start/end
-  ☐ VM: when unwinding, add each item to stack
+  ✔ Parser: track each block (global or function), function name, array of variable names (starting at FP), PC start/end @done(26-08-07 18:25)
+  ✔ VM: when unwinding, add each item to stack @done(26-08-07 18:25)
 Dice calls:
   ☐ New type: SEQUENCE_LIST
   ☐ Get total number of permutations (product of arg counts)
