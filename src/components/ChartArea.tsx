@@ -135,7 +135,7 @@ export function ChartArea() {
   const data = useMemo(() => outputsToChartData(outputs, displayMode), [outputs, displayMode]);
 
   return (
-    <div className="h-full p-2 sm:p-6 bg-white min-h-96 overflow-x-hidden">
+    <div className="h-full p-2 sm:p-6 min-h-96 overflow-x-hidden">
       <Scatter data={data} options={options} />
     </div>
   );

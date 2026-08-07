@@ -160,7 +160,7 @@ function Main() {
         {/* Right Panel: Display Mode Selector and Chart */}
         <div className="flex flex-col h-1/2 lg:h-full lg:min-h-0">
           <DisplayModeSelector />
-          <div className="flex-1 overflow-auto min-h-0">
+          <div className="flex-1 overflow-auto min-h-0 bg-white">
             {displayMode === "documentation" ? (
               <DocumentationView />
             ) : displayState === "output" ? (
