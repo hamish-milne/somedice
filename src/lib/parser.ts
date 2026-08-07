@@ -354,7 +354,7 @@ function parseTerm(state: ParserState): void {
           `no function matches the call [${args.map((x) => x ?? "?").join(", ")}]`,
         );
       }
-      pushCode(state, OPCODE.CALL, foundPtr);
+      pushCode(state, OPCODE.CALL, argCount, foundPtr);
       break;
     }
     default:
@@ -760,6 +760,7 @@ if (import.meta.vitest) {
         OPCODE.IMMEDIATE,
         2,
         OPCODE.CALL,
+        4,
         4,
         OPCODE.G_LOAD,
         0,

@@ -543,10 +543,11 @@ export function execute(state: ProgramState, outputs: Output[], maxOps: number):
       }
       case OPCODE.FUNCTION: {
         const paramCount = code[pc++];
-        const returnAddress = popNumber(stack);
-        // Save the frame pointer and return address
-        stack.splice(stack.length - paramCount, 0, returnAddress, fp);
-        fp = stack.length - paramCount;
+        if (paramCount != stack.length - fp) {
+          throw new Error(
+            `Function call parameter count mismatch: expected ${paramCount}, got ${stack.length - fp}`,
+          );
+        }
         const dieCall: boolean[] = Array(paramCount).fill(false);
         for (let i = 0; i < paramCount; i++) {
           const paramKind = code[pc++] as KIND;
@@ -584,8 +585,11 @@ export function execute(state: ProgramState, outputs: Output[], maxOps: number):
         break;
       }
       case OPCODE.CALL: {
+        const argCount = code[pc++];
         const functionPtr = code[pc++];
-        stack.push(pc); // Save the return address
+        // Save the frame pointer and return address
+        stack.splice(stack.length - argCount, 0, pc, fp);
+        fp = stack.length - argCount;
         pc = functionPtr; // Jump to the function
         break;
       }
