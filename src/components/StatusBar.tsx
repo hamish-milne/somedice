@@ -28,7 +28,7 @@ export function StatusBar() {
             </span>
           </div>
           <progress
-            className="w-full h-2.5 appearance-none rounded-full overflow-hidden [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:bg-blue-600"
+            className="w-full h-2.5 appearance-none rounded-full overflow-hidden [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:bg-blue-600 [&::-moz-progress-bar]:bg-blue-600"
             value={Math.min(100, Math.max(0, progress))}
             max="100"
           />

@@ -7,7 +7,7 @@ Misc:
 Frontend:
   ☐ Calculate progress with PC/PCMax
   ☐ Show errors
-  ☐ Display modes
+  ✔ Display modes @done(26-08-07 16:35)
 VM:
   ☐ RuntimeError (common Error class for location?)
   ☐ Get location from codeLocations

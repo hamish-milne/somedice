@@ -1,12 +1,11 @@
 import { formRadio, useStore } from "tinystate";
 import { RadioButton } from "./Button";
-
-type DisplayMode = "probability" | "cumulative" | "individual" | "documentation";
+import type { DisplayMode } from "../App";
 
 const modes: { value: DisplayMode; label: string }[] = [
-  { value: "probability", label: "Probability" },
-  { value: "cumulative", label: "Cumulative" },
-  { value: "individual", label: "Individual" },
+  { value: "exactly", label: "Exactly" },
+  { value: "atLeast", label: "At Least" },
+  { value: "atMost", label: "At Most" },
   { value: "documentation", label: "Documentation" },
 ];
 

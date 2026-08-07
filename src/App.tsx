@@ -21,7 +21,7 @@ import {
 import { syncStorage } from "tinystate/utils";
 import type { InputMessage, OutputMessage } from "./lib/runner";
 
-type DisplayMode = "probability" | "cumulative" | "individual" | "documentation";
+export type DisplayMode = "exactly" | "atLeast" | "atMost" | "documentation";
 
 // Toggle this to test error view
 const HAS_ERROR = false;
@@ -38,7 +38,7 @@ declare global {
 }
 
 const initialState: AppState = {
-  displayMode: "probability",
+  displayMode: "exactly",
   inputCode: "",
   outputs: [],
   runState: "idle",

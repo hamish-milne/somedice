@@ -14,6 +14,7 @@ import {
 import { Scatter } from "react-chartjs-2";
 import type { Output } from "../lib/common";
 import { useStore, useWatch } from "tinystate";
+import type { DisplayMode } from "../App";
 import { useMemo } from "react";
 
 // Register Chart.js components
@@ -35,7 +36,7 @@ function* labelGenerator() {
   }
 }
 
-function outputsToChartData(outputs: Output[]): ChartData<"scatter"> {
+function outputsToChartData(outputs: Output[], displayMode: DisplayMode): ChartData<"scatter"> {
   const datasets: ChartDataset<"scatter", Point[]>[] = [];
   const colorGen = seriesColorGenerator();
   const labelGen = labelGenerator();
@@ -58,6 +59,21 @@ function outputsToChartData(outputs: Output[]): ChartData<"scatter"> {
           i++;
         }
       }
+    }
+
+    switch (displayMode) {
+      case "atLeast":
+        for (let i = points.length - 2; i >= 0; i--) {
+          points[i].y += points[i + 1].y;
+        }
+        break;
+      case "atMost":
+        for (let i = 1; i < points.length; i++) {
+          points[i].y += points[i - 1].y;
+        }
+        break;
+      default:
+        break;
     }
 
     datasets.push({
@@ -115,7 +131,8 @@ export function ChartArea() {
   const store = useStore();
 
   const outputs = useWatch(store, "outputs");
-  const data = useMemo(() => outputsToChartData(outputs), [outputs]);
+  const displayMode = useWatch(store, "displayMode");
+  const data = useMemo(() => outputsToChartData(outputs, displayMode), [outputs, displayMode]);
 
   return (
     <div className="h-full p-2 sm:p-6 bg-white min-h-96 overflow-x-hidden">
