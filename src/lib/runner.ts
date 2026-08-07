@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
+import type { Output } from "./common";
 import { parseProgram } from "./parser";
-import { execute, type Output, type ProgramState } from "./vm";
+import { execute, type ProgramState } from "./vm";
 
 export type InputMessage = { type: "run"; programText: string };
 
@@ -13,6 +14,7 @@ const OPS_PER_PROGRESS_UPDATE = 1000;
 
 export function* runProgram(programText: string): Generator<OutputMessage, void, unknown> {
   try {
+    yield { type: "progress", opCount: 0 };
     const program = parseProgram(programText);
 
     const outputs: Output[] = [];

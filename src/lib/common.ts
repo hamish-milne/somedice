@@ -69,3 +69,13 @@ export type Program = {
   codeLocations: Location[];
   outputNames: string[][];
 };
+
+export type Sequence = readonly number[] & { readonly kind: typeof KIND.SEQUENCE };
+export type DieItem = readonly [value: number, count: number];
+export type Die = readonly DieItem[] & { readonly kind: typeof KIND.DIE };
+export type CollectionItem = readonly [sequence: Sequence, count: number];
+export type Collection = readonly [count: number, die: Die] & {
+  readonly kind: typeof KIND.COLLECTION;
+};
+
+export type Output = [name: string, value: Die];

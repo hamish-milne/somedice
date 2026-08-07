@@ -1,0 +1,28 @@
+Missing features:
+  ☐ Index into number
+  ☐ Sequence index sums all results
+Misc:
+  ☐ Die -> DIE_SIMPLE, DIE_DISCRETE, and DIE_NORM
+  ☐ Encode argcount in OPCODE.CALL; in FUNCTION use fp to recover it
+Frontend:
+  ☐ Calculate progress with PC/PCMax
+  ☐ Show errors
+  ☐ Display modes
+VM:
+  ☐ RuntimeError (common Error class for location?)
+  ☐ Get location from codeLocations
+  ☐ Stack unwinding (multiple locations for error)
+Debug variable values:
+  ☐ Parser: track each block (global or function), function name, array of variable names (starting at FP), PC start/end
+  ☐ VM: when unwinding, add each item to stack
+Dice calls:
+  ☐ New type: SEQUENCE_LIST
+  ☐ Get total number of permutations (product of arg counts)
+  ☐ Use modulo to select args from list, convert result to a number or Die
+  ☐ Aggregate results into a new Die
+Extras:
+  ☐ Operator (;) to combine multiple dice into a pool
+  ☐ Modulo operator
+☐ Integration tests
+☐ End-to-end tests
+☐ Push to somedice.hmilne.cc

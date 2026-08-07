@@ -18,7 +18,7 @@ export function CodeEditor({ placeholder = "Enter your dice code here..." }: Cod
       <textarea
         spellCheck={false}
         placeholder={placeholder}
-        className="flex-1 p-4 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 border border-gray-300"
+        className="flex-1 p-4 font-mono text-sm resize-none border border-gray-300  focus:outline-blue-500"
         {...formText(store, "inputCode")}
       />
     </div>

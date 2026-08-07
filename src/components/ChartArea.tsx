@@ -12,7 +12,7 @@ import {
   type Point,
 } from "chart.js";
 import { Scatter } from "react-chartjs-2";
-import type { Output } from "../lib/vm";
+import type { Output } from "../lib/common";
 import { useStore, useWatch } from "tinystate";
 import { useMemo } from "react";
 
@@ -77,13 +77,6 @@ const options: ChartOptions<"scatter"> = {
     legend: {
       position: "top",
     },
-    title: {
-      display: true,
-      text: "Dice Distribution",
-      font: {
-        size: 16,
-      },
-    },
   },
   datasets: {
     scatter: {
@@ -99,8 +92,8 @@ const options: ChartOptions<"scatter"> = {
         display: true,
         text: "Probability",
       },
-      // Add a percentage sign to the y-axis ticks
       ticks: {
+        // Add a percentage sign to the y-axis ticks
         callback: function (value) {
           return value + "%";
         },
@@ -110,6 +103,9 @@ const options: ChartOptions<"scatter"> = {
       title: {
         display: true,
         text: "Value",
+      },
+      ticks: {
+        stepSize: 1, // Ensure x-axis ticks are integers
       },
     },
   },
@@ -122,10 +118,8 @@ export function ChartArea() {
   const data = useMemo(() => outputsToChartData(outputs), [outputs]);
 
   return (
-    <div className="h-full flex flex-col bg-white">
-      <div className="flex-1 p-6">
-        <Scatter data={data} options={options} />
-      </div>
+    <div className="h-full p-2 sm:p-6 bg-white min-h-96 overflow-x-hidden">
+      <Scatter data={data} options={options} />
     </div>
   );
 }

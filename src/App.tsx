@@ -119,7 +119,7 @@ function Main() {
   const displayMode = useWatch(store, "displayMode");
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100">
+    <div className="h-full min-w-85 flex flex-col bg-gray-100">
       <RunnerManager />
       {/* Header */}
       <Header />

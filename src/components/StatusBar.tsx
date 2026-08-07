@@ -17,8 +17,8 @@ export function StatusBar() {
   }, [store]);
 
   return (
-    <div className="bg-white border-t border-gray-300 px-6 py-4 shadow-sm">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+    <div className="bg-white border-t border-gray-300 px-3 py-2 sm:px-6 sm:py-4 shadow-sm">
+      <div className="flex flex-row items-center gap-4">
         {/* Progress Bar */}
         <div className="flex-1 w-full sm:w-auto">
           <div className="mb-2 flex justify-between items-center">

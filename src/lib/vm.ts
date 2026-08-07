@@ -1,4 +1,14 @@
-import { KIND, OPCODE, type Program } from "./common";
+import {
+  KIND,
+  OPCODE,
+  type Collection,
+  type CollectionItem,
+  type Die,
+  type DieItem,
+  type Output,
+  type Program,
+  type Sequence,
+} from "./common";
 
 const { freeze, assign } = Object;
 const { from: arrayFrom } = Array;
@@ -7,38 +17,25 @@ const KIND_DIE = freeze({ kind: KIND.DIE });
 const KIND_SEQUENCE = freeze({ kind: KIND.SEQUENCE });
 const KIND_COLLECTION = freeze({ kind: KIND.COLLECTION });
 
-type Sequence = readonly number[] & { readonly kind: typeof KIND.SEQUENCE };
-type DieItem = readonly [value: number, count: number];
-type Die = readonly DieItem[] & { readonly kind: typeof KIND.DIE };
-type CollectionItem = readonly [sequence: Sequence, count: number];
-type Collection = readonly CollectionItem[] & { readonly kind: typeof KIND.COLLECTION };
-
 function dieItem(value: number, count: number): DieItem {
   return freeze([value, count]);
 }
 
-function collectionItem(sequence: Sequence, count: number): CollectionItem {
-  return freeze([sequence, count]);
-}
+const DIE_ASCENDING = (a: DieItem, b: DieItem) => a[0] - b[0];
 
 function die(items: DieItem[]): Die {
-  return freeze(
-    assign(
-      items.sort((a, b) => a[0] - b[0]),
-      KIND_DIE,
-    ),
-  );
+  return freeze(assign(items.sort(DIE_ASCENDING), KIND_DIE));
 }
 
 function sequence(items: number[]): Sequence {
   return freeze(assign(items, KIND_SEQUENCE));
 }
 
-function collection(items: CollectionItem[]): Collection {
-  return freeze(assign(items, KIND_COLLECTION));
+function collection(count: number, die: Die): Collection {
+  return freeze(assign([count, die] as const, KIND_COLLECTION));
 }
 
-function totalWeight(d: Die | Collection): number {
+function totalWeight(d: Die): number {
   return d.reduce((acc, [, count]) => acc + count, 0);
 }
 
@@ -87,10 +84,6 @@ function numberOperation(op: number, a: number, b: number): number {
   }
 }
 
-function sequenceKey(s: readonly number[]): string {
-  return s.join(",");
-}
-
 function dieMap() {
   return new Map<number, number>();
 }
@@ -101,33 +94,6 @@ function dieMapAdd(map: Map<number, number>, value: number, count: number) {
 
 function dieMapFinish(map: Map<number, number>): DieItem[] {
   return arrayFrom(map.entries()).map(([value, count]) => dieItem(value, count));
-}
-
-function collectionMap() {
-  return new Map<string, [Sequence, number]>();
-}
-
-function collectionMapAdd(map: Map<string, [Sequence, number]>, seq: Sequence, count: number) {
-  const key = sequenceKey(seq);
-  const existing = map.get(key);
-  if (existing) {
-    existing[1] += count;
-  } else {
-    map.set(key, [seq, count]);
-  }
-}
-
-function collectionMapFinish(map: Map<string, [Sequence, number]>): CollectionItem[] {
-  return arrayFrom(map.values()).map(([seq, count]) => collectionItem(seq, count));
-}
-
-function collectionToDie(c: Collection): Die {
-  const combinedMap = dieMap();
-  for (const [seq, count] of c) {
-    const value = sum(seq);
-    dieMapAdd(combinedMap, value, count);
-  }
-  return die(dieMapFinish(combinedMap));
 }
 
 function dNumber(d: number): Die {
@@ -144,7 +110,7 @@ function valueToDie(x: ProgramValue): Die {
     case KIND.SEQUENCE:
       return die([[sum(x), 1]]);
     case KIND.COLLECTION:
-      return collectionToDie(x);
+      return collectionSum(x);
   }
   throw new Error("Invalid ProgramValue");
 }
@@ -164,7 +130,7 @@ function valueToNewDie(x: ProgramValue): Die {
       return die(dieMapFinish(map));
     }
     case KIND.COLLECTION:
-      return collectionToDie(x);
+      return collectionSum(x);
   }
   throw new Error("Invalid ProgramValue");
 }
@@ -177,7 +143,7 @@ function valueToNewSequence(x: ProgramValue): Sequence {
     case KIND.SEQUENCE:
       return x;
     default: {
-      const die = x.kind === KIND.DIE ? x : collectionToDie(x);
+      const die = x.kind === KIND.DIE ? x : collectionSum(x);
       // Conversion of a die to a sequence normalizes the odds of each value
       return sequence(die.map(([value]) => value));
     }
@@ -203,7 +169,7 @@ function valueToCollection(x: Collection | Die): Collection {
   if (x.kind === KIND.COLLECTION) {
     return x;
   }
-  return collection(x.map(([value, count]) => collectionItem(sequence([value]), count)));
+  return collection(1, valueToDie(x));
 }
 
 function sum(n: readonly number[]): number {
@@ -216,22 +182,22 @@ function product(n: readonly number[]): number {
 
 const NUMBER_DESCENDING = (a: number, b: number) => b - a;
 
-function dNumberDie(n: number, d: Die): Collection {
+const MAX_SAFE_NUMBER = 1e300;
+const MAX_ARRAY_LENGTH = 5e6;
+
+function getAllSequences([n, d]: Collection): CollectionItem[] {
   const vals = d.map((e) => e[0]);
   const faceCounts = d.map((e) => e[1]);
   const k = vals.length;
 
-  if (k === 0) return collection(n === 0 ? [[sequence([]), 1]] : []);
+  if (k === 0) return n === 0 ? [[sequence([]), 1]] : [];
 
   const fact = Array.from<number>({ length: n + 1 });
   fact[0] = 1;
   for (let i = 1; i <= n; i++) {
     fact[i] = fact[i - 1] * i;
-    // n! is the largest value used to derive every count, so bail out here before precision breaks down.
-    if (fact[i] > Number.MAX_SAFE_INTEGER) {
-      throw new Error(
-        `dNumberDie: n=${n} is too large - factorial exceeds Number.MAX_SAFE_INTEGER`,
-      );
+    if (fact[i] > MAX_SAFE_NUMBER) {
+      throw new Error(`getAllSequences: n=${n} is too large - factorial exceeds MAX_SAFE_NUMBER`);
     }
   }
 
@@ -244,6 +210,11 @@ function dNumberDie(n: number, d: Die): Collection {
     if (idx === k - 1) {
       for (let j = 0; j < remaining; j++) seq.push(vals[idx]);
       const total = (fact[n] / (denom * fact[remaining])) * pow * faceCounts[idx] ** remaining;
+      if (results.length > MAX_ARRAY_LENGTH) {
+        throw new Error(
+          `getAllSequences: n=${n} is too large - more than ${MAX_ARRAY_LENGTH} unique sequences generated`,
+        );
+      }
       results.push([sequence(seq.slice().sort(NUMBER_DESCENDING)), total]);
       for (let j = 0; j < remaining; j++) seq.pop();
       return;
@@ -259,16 +230,32 @@ function dNumberDie(n: number, d: Die): Collection {
   }
 
   recurse(0, n, 1, 1);
-  return collection(results);
+  console.log(results.length);
+  console.log(fact);
+  return results;
 }
 
-function dNumberDie_sum(n: number, d: Die): Die {
+// Polynomial coefficients indexed from `offset` (the exponent of coeffs[0]).
+type Poly = { offset: number; coeffs: number[] };
+function multiplyPoly(a: Poly, b: Poly): Poly {
+  const coeffs = Array.from<number>({ length: a.coeffs.length + b.coeffs.length - 1 }).fill(0);
+  for (let i = 0; i < a.coeffs.length; i++) {
+    if (a.coeffs[i] === 0) continue;
+    for (let j = 0; j < b.coeffs.length; j++) {
+      const sum = coeffs[i + j] + a.coeffs[i] * b.coeffs[j];
+      if (sum > MAX_SAFE_NUMBER) {
+        throw new Error(`multiplyPoly: coefficients exceed MAX_SAFE_NUMBER`);
+      }
+      coeffs[i + j] = sum;
+    }
+  }
+  return { offset: a.offset + b.offset, coeffs };
+}
+
+function collectionSum([n, d]: readonly [number, Die]): Die {
   const faces = d;
   if (faces.length === 0) return die(n === 0 ? [[0, 1]] : []);
   if (n === 0) return die([[0, 1]]);
-
-  // Polynomial coefficients indexed from `offset` (the exponent of coeffs[0]).
-  type Poly = { offset: number; coeffs: number[] };
 
   const [minVal] = faces[0];
   const [maxVal] = faces[faces.length - 1];
@@ -278,37 +265,26 @@ function dNumberDie_sum(n: number, d: Die): Die {
   };
   for (const [value, count] of faces) base.coeffs[value - minVal] = count;
 
-  function multiply(a: Poly, b: Poly): Poly {
-    const coeffs = Array.from<number>({ length: a.coeffs.length + b.coeffs.length - 1 }).fill(0);
-    for (let i = 0; i < a.coeffs.length; i++) {
-      if (a.coeffs[i] === 0) continue;
-      for (let j = 0; j < b.coeffs.length; j++) {
-        const sum = coeffs[i + j] + a.coeffs[i] * b.coeffs[j];
-        // Each coefficient is a running outcome count; bail out before precision is silently lost.
-        if (sum > Number.MAX_SAFE_INTEGER) {
-          throw new Error(
-            `dNumberDie_sum: n=${n} is too large - a sum's frequency exceeds Number.MAX_SAFE_INTEGER`,
-          );
-        }
-        coeffs[i + j] = sum;
-      }
-    }
-    return { offset: a.offset + b.offset, coeffs };
-  }
-
   // Exponentiation by squaring: O(log n) multiplications instead of O(n).
   let result: Poly = { offset: 0, coeffs: [1] };
   let power = base;
   let exp = n;
   while (exp > 0) {
-    if (exp & 1) result = multiply(result, power);
+    if (exp & 1) result = multiplyPoly(result, power);
     exp >>= 1;
-    if (exp > 0) power = multiply(power, power);
+    if (exp > 0) power = multiplyPoly(power, power);
   }
 
-  const output: [number, number][] = [];
+  const output: DieItem[] = [];
   for (let i = 0; i < result.coeffs.length; i++) {
-    if (result.coeffs[i] > 0) output.push([result.offset + i, result.coeffs[i]]);
+    if (result.coeffs[i] > 0) {
+      output.push([result.offset + i, result.coeffs[i]]);
+      if (output.length > MAX_ARRAY_LENGTH) {
+        throw new Error(
+          `dNumberDie_sum: n=${n} is too large - more than ${MAX_ARRAY_LENGTH} unique sums generated`,
+        );
+      }
+    }
   }
   return die(output);
 }
@@ -326,22 +302,23 @@ function lcm(values: number[]): number {
   return values.reduce((acc, val) => (acc * val) / gcd(acc, val), 1);
 }
 
-function dDieDie(n: Die, d: Die): Collection {
-  const result = collectionMap();
+function dDieDie(n: Die, d: Die): Die {
+  const result = dieMap();
   const allPermuted = n.map(([value, count]) => {
-    const permuted = dNumberDie(value, d);
+    const permuted = collectionSum([value, d]);
     return [value, count, permuted, totalWeight(permuted)] as const;
   });
-  const totalCollectionWeight = lcm(allPermuted.map(([, , , weight]) => weight));
+  const allPermutedWeights = allPermuted.map(([, , , weight]) => weight);
+  const totalCollectionWeight =
+    product(allPermutedWeights) < Number.MAX_SAFE_INTEGER ? lcm(allPermutedWeights) : 1;
 
   for (const [, count, permuted, weight] of allPermuted) {
     for (const [seq, permCount] of permuted) {
       const combinedCount = count * permCount * (totalCollectionWeight / weight);
-      // No need to sort here because dNumberDie already sorts sequences
-      collectionMapAdd(result, seq, combinedCount);
+      dieMapAdd(result, seq, combinedCount);
     }
   }
-  return collection(collectionMapFinish(result));
+  return die(dieMapFinish(result));
 }
 
 function numberDieOperation(op: number, a: number, b: Die, reverse: boolean): Die {
@@ -349,19 +326,6 @@ function numberDieOperation(op: number, a: number, b: Die, reverse: boolean): Di
   for (const [value, count] of b) {
     const newValue = reverse ? numberOperation(op, value, a) : numberOperation(op, a, value);
     dieMapAdd(resultMap, newValue, count);
-  }
-  return die(dieMapFinish(resultMap));
-}
-
-function collectionLength(c: Collection): number | Die {
-  const resultMap = dieMap();
-  for (const [seq, count] of c) {
-    const length = seq.length;
-    dieMapAdd(resultMap, length, count);
-  }
-  if (resultMap.size === 1) {
-    const [[length]] = resultMap.entries();
-    return length;
   }
   return die(dieMapFinish(resultMap));
 }
@@ -412,16 +376,11 @@ function valueToString(value: ProgramValue): string {
         .map(([v, c]) => `${v}:${c}`)
         .join(",")}${ellipsis}}`;
     case KIND.COLLECTION:
-      return `<${value
-        .slice(0, MAX_STRING_ITEMS)
-        .map(([seq, c]) => `${valueToString(seq)}:${c}`)
-        .join(",")}${ellipsis}>`;
+      return `${value[1]}d${valueToString(value[0])}`;
   }
 }
 
 const MAX_STACK_SIZE = 10000;
-
-export type Output = [name: string, value: Die];
 
 export function execute(state: ProgramState, outputs: Output[], opCount: number): boolean {
   const { program, stack } = state;
@@ -469,11 +428,9 @@ export function execute(state: ProgramState, outputs: Output[], opCount: number)
         const b = valueToNewDie(pop(stack));
         const a = valueToNumberOrDie(pop(stack));
         if (typeof a === "number") {
-          stack.push(dNumberDie(a, b));
+          stack.push(collection(a, b));
         } else {
-          const collection = dDieDie(a, b);
-          // {die}d{die} always returns a die, not a collection
-          stack.push(collectionToDie(collection));
+          stack.push(dDieDie(a, b));
         }
         break;
       }
@@ -489,7 +446,7 @@ export function execute(state: ProgramState, outputs: Output[], opCount: number)
         } else if (a.kind === KIND.SEQUENCE) {
           stack.push(a.length);
         } else {
-          stack.push(collectionLength(a));
+          stack.push(a[0]);
         }
         break;
       }
@@ -511,7 +468,7 @@ export function execute(state: ProgramState, outputs: Output[], opCount: number)
           case KIND.COLLECTION: {
             // Create a new die that represents the indexed values of each sequence in the collection
             const resultMap = dieMap();
-            for (const [seq, count] of a) {
+            for (const [seq, count] of getAllSequences(a)) {
               const value = sequenceIndex(seq, index);
               dieMapAdd(resultMap, value, count);
             }
@@ -842,33 +799,26 @@ if (import.meta.vitest) {
     test("D number,number", () => {
       runCode(
         [IMMEDIATE, 2, IMMEDIATE, 4, D, OUTPUT, -1],
-        collectionToDie(
-          collection([
-            [sequence([1, 1]), 1],
-            [sequence([2, 1]), 2],
-            [sequence([3, 1]), 2],
-            [sequence([4, 1]), 2],
-            [sequence([2, 2]), 1],
-            [sequence([3, 2]), 2],
-            [sequence([4, 2]), 2],
-            [sequence([3, 3]), 1],
-            [sequence([4, 3]), 2],
-            [sequence([4, 4]), 1],
-          ]),
-        ),
+        die([
+          [2, 1],
+          [3, 2],
+          [4, 3],
+          [5, 4],
+          [6, 3],
+          [7, 2],
+          [8, 1],
+        ]),
       );
     });
 
     test("D number,sequence", () => {
       runCode(
         [IMMEDIATE, 2, IMMEDIATE, 3, IMMEDIATE, 5, SEQUENCE, 2, D, OUTPUT, -1],
-        collectionToDie(
-          collection([
-            [sequence([3, 3]), 1],
-            [sequence([3, 5]), 2],
-            [sequence([5, 5]), 1],
-          ]),
-        ),
+        die([
+          [6, 1],
+          [8, 2],
+          [10, 1],
+        ]),
       );
     });
 
