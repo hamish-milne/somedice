@@ -7,30 +7,35 @@ export type InputMessage = { type: "run"; programText: string };
 
 export type OutputMessage =
   | { type: "error"; message: string }
-  | { type: "progress"; opCount: number }
-  | { type: "result"; outputs: Output[] };
+  | { type: "progress"; opCount: number; pcMax: number; programSize: number }
+  | { type: "result"; outputs: Output[]; opCount: number };
 
 const OPS_PER_PROGRESS_UPDATE = 1000;
 
 export function* runProgram(programText: string): Generator<OutputMessage, void, unknown> {
   try {
-    yield { type: "progress", opCount: 0 };
+    yield { type: "progress", opCount: 0, pcMax: 0, programSize: 1 };
     const program = parseProgram(programText);
 
     const outputs: Output[] = [];
     const state: ProgramState = {
       program,
       stack: [],
-      ip: 0,
+      pc: 0,
       fp: 0,
+      pcMax: 0,
+      opCount: 0,
     };
-    let opCount = 0;
 
-    while (!execute(state, outputs, OPS_PER_PROGRESS_UPDATE)) {
-      opCount += OPS_PER_PROGRESS_UPDATE;
-      yield { type: "progress", opCount };
+    while (!execute(state, outputs, state.opCount + OPS_PER_PROGRESS_UPDATE)) {
+      yield {
+        type: "progress",
+        opCount: state.opCount,
+        pcMax: state.pcMax,
+        programSize: state.program.code.length,
+      };
     }
-    yield { type: "result", outputs };
+    yield { type: "result", outputs, opCount: state.opCount };
   } catch (e) {
     if (e instanceof Error) {
       yield { type: "error", message: e.message };

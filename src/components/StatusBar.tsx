@@ -6,7 +6,8 @@ export function StatusBar() {
   const store = useStore();
   const operationCount = useWatch(store, "opCount");
   const isRunning = useWatch(store, "runState", (state) => state === "running", []);
-  const progress = 50; // Example progress calculation
+  const pcMax = useWatch(store, "pcMax");
+  const programSize = useWatch(store, "programSize");
 
   const onStart = useCallback(() => {
     patch(store, { runState: "starting" });
@@ -29,8 +30,8 @@ export function StatusBar() {
           </div>
           <progress
             className="w-full h-2.5 appearance-none rounded-full overflow-hidden [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:bg-blue-600 [&::-moz-progress-bar]:bg-blue-600"
-            value={Math.min(100, Math.max(0, progress))}
-            max="100"
+            value={pcMax}
+            max={programSize}
           />
         </div>
 

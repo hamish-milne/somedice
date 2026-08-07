@@ -92,7 +92,7 @@ const TOKEN_NAME_MAP = freeze(
 
 const TOKEN_PATTERN_MAP: readonly [number, RegExp][] = freeze([
   [TOKEN.VARIABLE, /[A-Z_]+/y],
-  [TOKEN.NUMBER, /[1-9][0-9]*/y],
+  [TOKEN.NUMBER, /0|(?:[1-9][0-9]*)/y],
   [TOKEN.KEYWORD, /[a-z]+/y],
   [TOKEN.STRING, /"[^"]*"/y],
 ]);

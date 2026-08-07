@@ -5,7 +5,7 @@ Misc:
   ☐ Die -> DIE_SIMPLE, DIE_DISCRETE, and DIE_NORM
   ☐ Encode argcount in OPCODE.CALL; in FUNCTION use fp to recover it
 Frontend:
-  ☐ Calculate progress with PC/PCMax
+  ✔ Calculate progress with PC/PCMax @done(26-08-07 16:56)
   ☐ Show errors
   ✔ Display modes @done(26-08-07 16:35)
 VM:

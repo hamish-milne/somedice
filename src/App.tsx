@@ -34,6 +34,8 @@ declare global {
     runState: "idle" | "running" | "error" | "starting" | "canceling";
     error: string;
     opCount: number;
+    pcMax: number;
+    programSize: number;
   }
 }
 
@@ -44,6 +46,8 @@ const initialState: AppState = {
   runState: "idle",
   error: "",
   opCount: 0,
+  pcMax: 0,
+  programSize: 1,
 };
 
 export default function App() {
@@ -70,10 +74,20 @@ function createRunnerWorker(store: AppStore) {
         patch(store, { runState: "error", error: msg.message });
         break;
       case "progress":
-        patch(store, { runState: "running", opCount: msg.opCount });
+        patch(store, {
+          runState: "running",
+          opCount: msg.opCount,
+          pcMax: msg.pcMax,
+          programSize: msg.programSize,
+        });
         break;
       case "result":
-        patch(store, { runState: "idle", outputs: msg.outputs });
+        patch(store, {
+          runState: "idle",
+          outputs: msg.outputs,
+          pcMax: peek(store, "programSize"),
+          opCount: msg.opCount,
+        });
         break;
     }
   };

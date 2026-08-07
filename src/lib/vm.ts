@@ -356,8 +356,10 @@ function sequenceIndex(seq: Sequence, index: number): number {
 export type ProgramState = {
   program: Program;
   stack: ProgramValue[];
-  ip: number;
+  pc: number;
   fp: number;
+  pcMax: number;
+  opCount: number;
 };
 
 const MAX_STRING_ITEMS = 10;
@@ -382,21 +384,25 @@ function valueToString(value: ProgramValue): string {
 
 const MAX_STACK_SIZE = 10000;
 
-export function execute(state: ProgramState, outputs: Output[], opCount: number): boolean {
+export function execute(state: ProgramState, outputs: Output[], maxOps: number): boolean {
   const { program, stack } = state;
   const { code } = program;
-  let { ip, fp } = state;
-  for (let executedOps = 0; executedOps < opCount; executedOps++) {
-    if (ip >= code.length) {
+  let { pc, fp } = state;
+  for (; state.opCount < maxOps; state.opCount++) {
+    if (pc > state.pcMax) {
+      state.pcMax = pc;
+    }
+    if (pc >= code.length) {
+      state.pc = pc;
       return true;
     }
     if (stack.length > MAX_STACK_SIZE) {
       throw new Error("Stack overflow");
     }
-    const opcode = code[ip++];
+    const opcode = code[pc++];
     switch (opcode) {
       case OPCODE.IMMEDIATE: {
-        const value = code[ip++];
+        const value = code[pc++];
         stack.push(value);
         break;
       }
@@ -488,57 +494,62 @@ export function execute(state: ProgramState, outputs: Output[], opCount: number)
         break;
       }
       case OPCODE.SEQUENCE: {
-        const count = code[ip++];
+        const count = code[pc++];
         const seq: number[] = [];
         for (let i = 0; i < count; i++) {
           const entry = valueToNewSequence(pop(stack));
-          seq.push(...entry);
+          // Efficiently append the entry to the sequence (avoiding stack overflow for large sequences)
+          const j = seq.length;
+          seq.length += entry.length;
+          for (let k = 0; k < entry.length; k++) {
+            seq[j + k] = entry[k];
+          }
         }
         stack.push(sequence(seq));
         break;
       }
       case OPCODE.G_LOAD: {
-        const index = code[ip++];
+        const index = code[pc++];
         stack.push(stack[index]);
         break;
       }
       case OPCODE.G_STORE: {
-        const index = code[ip++];
+        const index = code[pc++];
         stack[index] = pop(stack);
         break;
       }
       case OPCODE.L_LOAD: {
-        const index = code[ip++];
+        const index = code[pc++];
         stack.push(stack[fp + index]);
         break;
       }
       case OPCODE.L_STORE: {
-        const index = code[ip++];
+        const index = code[pc++];
         stack[fp + index] = pop(stack);
         break;
       }
       case OPCODE.JUMP: {
-        const target = code[ip++];
-        ip += target;
+        const target = code[pc++];
+        pc += target;
         break;
       }
       case OPCODE.JUMP_IF_FALSE: {
-        const target = code[ip++];
+        const target = code[pc++];
         const condition = valueToNumber(pop(stack));
         if (!condition) {
-          ip += target;
+          pc += target;
         }
         break;
       }
       case OPCODE.FUNCTION: {
-        const paramCount = code[ip++];
+        const paramCount = code[pc++];
         const returnAddress = popNumber(stack);
         // Save the frame pointer and return address
         stack.splice(stack.length - paramCount, 0, returnAddress, fp);
         fp = stack.length - paramCount;
         const dieCall: boolean[] = Array(paramCount).fill(false);
         for (let i = 0; i < paramCount; i++) {
-          const paramKind = code[ip++] as KIND;
+          const paramKind = code[pc++] as KIND;
           const arg = stack[fp + i];
           switch (paramKind) {
             case KIND.NUMBER:
@@ -573,16 +584,16 @@ export function execute(state: ProgramState, outputs: Output[], opCount: number)
         break;
       }
       case OPCODE.CALL: {
-        const functionPtr = code[ip++];
-        stack.push(ip); // Save the return address
-        ip = functionPtr; // Jump to the function
+        const functionPtr = code[pc++];
+        stack.push(pc); // Save the return address
+        pc = functionPtr; // Jump to the function
         break;
       }
       case OPCODE.RETURN: {
         const value = pop(stack);
         stack.length = fp; // Clear the stack to the frame pointer
         fp = popNumber(stack); // Restore the previous frame pointer
-        ip = popNumber(stack); // Restore the instruction pointer
+        pc = popNumber(stack); // Restore the instruction pointer
         stack.push(value); // Push the return value onto the stack
         break;
       }
@@ -595,7 +606,7 @@ export function execute(state: ProgramState, outputs: Output[], opCount: number)
         break;
       }
       case OPCODE.LOOP_START: {
-        const loopEnd = code[ip++];
+        const loopEnd = code[pc++];
         const loopIndex = popNumber(stack);
         const sequence = stack[stack.length - 1];
         if (typeof sequence === "number" || sequence.kind !== KIND.SEQUENCE) {
@@ -606,20 +617,20 @@ export function execute(state: ProgramState, outputs: Output[], opCount: number)
           stack.push(sequence[loopIndex]); // Push current value
         } else {
           stack.pop(); // Pop the sequence
-          ip += loopEnd; // Jump to loop end
+          pc += loopEnd; // Jump to loop end
         }
         break;
       }
       case OPCODE.RESERVE: {
-        const count = code[ip++];
+        const count = code[pc++];
         for (let i = 0; i < count; i++) {
           stack.push(0);
         }
         break;
       }
       case OPCODE.OUTPUT: {
-        const varCount = code[ip++];
-        const outputNames = varCount === -1 ? null : [...program.outputNames[code[ip++]]];
+        const varCount = code[pc++];
+        const outputNames = varCount === -1 ? null : [...program.outputNames[code[pc++]]];
 
         let finalName = "";
         if (outputNames) {
@@ -643,10 +654,10 @@ export function execute(state: ProgramState, outputs: Output[], opCount: number)
         break;
       }
       default:
-        throw new Error(`Unknown opcode ${opcode} at instruction pointer ${ip - 1}`);
+        throw new Error(`Unknown opcode ${opcode} at instruction pointer ${pc - 1}`);
     }
   }
-  state.ip = ip;
+  state.pc = pc;
   state.fp = fp;
   return false;
 }
@@ -663,8 +674,10 @@ if (import.meta.vitest) {
     const state: ProgramState = {
       program,
       stack: [],
-      ip: 0,
+      pc: 0,
       fp: 0,
+      pcMax: 0,
+      opCount: 0,
     };
     const outputs: Output[] = [];
     const finished = execute(state, outputs, 1000);
