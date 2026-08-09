@@ -484,7 +484,7 @@ function parseFunction(state: ParserState) {
   const { code } = state;
   branch(state, OPCODE.JUMP, () => {
     const functionPtr = code.length;
-    pushCode(state, OPCODE.FUNCTION, PLACEHOLDER); // Placeholder for number of arguments
+    pushCode(state, OPCODE.FUNCTION_INIT, PLACEHOLDER); // Placeholder for number of arguments
     const nArgsIndex = code.length - 1;
     while (true) {
       const token = nextToken(state);
@@ -534,13 +534,17 @@ function parseFunction(state: ParserState) {
     }
     state.functions.push([functionName, functionPtr]);
     code[nArgsIndex] = parameterNames.length; // Update number of arguments
-    state.locals = parameterNames;
+    state.locals = parameterNames.slice();
+    pushCode(state, OPCODE.FUNCTION_LOOP);
+    const loopStart = code.length + 1;
     pushCode(state, OPCODE.RESERVE, PLACEHOLDER); // Reserve space for local variables
     const reserveIdx = code.length - 1;
     parseBlock(state);
     state.code[reserveIdx] = state.locals.length - parameterNames.length; // Update reserved space for local variables
     pushCode(state, OPCODE.SEQUENCE, 0, OPCODE.RETURN); // Ensure function always returns a value
-    pushDebugFrame(state, functionName.map((x) => x ?? "?").join(" "), functionPtr, parameterNames);
+    const functionNameStr = functionName.map((x) => x ?? "?").join(" ");
+    pushDebugFrame(state, functionNameStr, loopStart, state.locals);
+    pushDebugFrame(state, functionNameStr + " (loop)", functionPtr, parameterNames);
   });
   state.locals = undefined;
 }
@@ -602,11 +606,11 @@ function parseOutput(state: ParserState) {
         varCount++;
       }
     }
-    pushCode(state, OPCODE.OUTPUT, varCount, state.outputNames.length);
+    pushCode(state, OPCODE.OUTPUT_NAMED, varCount, state.outputNames.length);
     state.outputNames.push(stringParts);
   } else {
     backtrack(state, token);
-    pushCode(state, OPCODE.OUTPUT, -1);
+    pushCode(state, OPCODE.OUTPUT);
   }
 }
 
@@ -728,7 +732,6 @@ if (import.meta.vitest) {
         1,
         OPCODE.ADD,
         OPCODE.OUTPUT,
-        -1,
       ]);
       expect(program.outputNames).toEqual([]);
     });
@@ -745,13 +748,14 @@ if (import.meta.vitest) {
         OPCODE.RESERVE,
         1,
         OPCODE.JUMP,
-        17,
-        OPCODE.FUNCTION,
+        18,
+        OPCODE.FUNCTION_INIT,
         4,
         KIND.NUMBER,
         KIND.SEQUENCE,
         KIND.DIE,
         KIND.ANY,
+        OPCODE.FUNCTION_LOOP,
         OPCODE.RESERVE,
         0,
         OPCODE.L_LOAD,
@@ -780,7 +784,7 @@ if (import.meta.vitest) {
         4,
         OPCODE.G_LOAD,
         0,
-        OPCODE.OUTPUT,
+        OPCODE.OUTPUT_NAMED,
         1,
         0,
       ]);
@@ -805,7 +809,6 @@ if (import.meta.vitest) {
         2,
         OPCODE.EXPONENT,
         OPCODE.OUTPUT,
-        -1,
       ]);
       expect(program.outputNames).toEqual([]);
     });
@@ -828,15 +831,14 @@ if (import.meta.vitest) {
         1,
         OPCODE.LOOP_INIT,
         OPCODE.LOOP_START,
-        8,
+        7,
         OPCODE.G_STORE,
         0,
         OPCODE.G_LOAD,
         0,
         OPCODE.OUTPUT,
-        -1,
         OPCODE.JUMP,
-        -10,
+        -9,
       ]);
       expect(program.outputNames).toEqual([]);
     });
@@ -865,30 +867,27 @@ if (import.meta.vitest) {
         3,
         OPCODE.GREATER_THAN,
         OPCODE.JUMP_IF_FALSE,
-        6,
+        5,
         OPCODE.IMMEDIATE,
         1,
         OPCODE.OUTPUT,
-        -1,
         OPCODE.JUMP,
-        17,
+        15,
         OPCODE.G_LOAD,
         0,
         OPCODE.IMMEDIATE,
         2,
         OPCODE.LESS_THAN,
         OPCODE.JUMP_IF_FALSE,
-        6,
+        5,
         OPCODE.IMMEDIATE,
         2,
         OPCODE.OUTPUT,
-        -1,
         OPCODE.JUMP,
-        4,
+        3,
         OPCODE.IMMEDIATE,
         3,
         OPCODE.OUTPUT,
-        -1,
       ]);
       expect(program.outputNames).toEqual([]);
     });

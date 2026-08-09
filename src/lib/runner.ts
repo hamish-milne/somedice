@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { BaseError, type DebugInfo, type Output } from "./common";
 import { parseProgram } from "./parser";
-import { execute, getDebugInfo, type ProgramState } from "./vm";
+import { execute, getDebugInfo, newState } from "./vm";
 
 export type InputMessage = { type: "run"; programText: string };
 
@@ -31,19 +31,10 @@ export function* runProgram(programText: string): Generator<OutputMessage, void,
   try {
     yield { type: "progress", opCount: 0, pcMax: 0, programSize: 1 };
     const program = parseProgram(programText);
-
-    const outputs: Output[] = [];
-    const state: ProgramState = {
-      program,
-      stack: [],
-      pc: 0,
-      fp: 0,
-      pcMax: 0,
-      opCount: 0,
-    };
+    const state = newState(program);
 
     try {
-      while (!execute(state, outputs, state.opCount + OPS_PER_PROGRESS_UPDATE)) {
+      while (!execute(state, state.opCount + OPS_PER_PROGRESS_UPDATE)) {
         yield {
           type: "progress",
           opCount: state.opCount,
@@ -64,7 +55,7 @@ export function* runProgram(programText: string): Generator<OutputMessage, void,
       }
       throw new RuntimeError(message, debugInfo);
     }
-    yield { type: "result", outputs, opCount: state.opCount };
+    yield { type: "result", outputs: state.outputs, opCount: state.opCount };
   } catch (e) {
     if (e instanceof BaseError) {
       yield { type: "error", errorType: e.errorType(), message: e.message, debugInfo: e.debugInfo };

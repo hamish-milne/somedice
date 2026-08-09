@@ -3,7 +3,7 @@ import {
   OPCODE,
   valueToString,
   type Collection,
-  type CollectionItem,
+  type ArgListItem,
   type DebugInfo,
   type Die,
   type DieItem,
@@ -11,6 +11,7 @@ import {
   type Program,
   type ProgramValue,
   type Sequence,
+  type ArgList,
 } from "./common";
 
 const { freeze, assign } = Object;
@@ -19,6 +20,7 @@ const { from: arrayFrom } = Array;
 const KIND_DIE = freeze({ kind: KIND.DIE });
 const KIND_SEQUENCE = freeze({ kind: KIND.SEQUENCE });
 const KIND_COLLECTION = freeze({ kind: KIND.COLLECTION });
+const KIND_ARG_LIST = freeze({ kind: KIND.ARGLIST });
 
 function dieItem(value: number, count: number): DieItem {
   return freeze([value, count]);
@@ -36,6 +38,10 @@ function sequence(items: number[]): Sequence {
 
 function collection(count: number, die: Die): Collection {
   return freeze(assign([count, die] as const, KIND_COLLECTION));
+}
+
+function argList(items: ArgListItem[]): ArgList {
+  return freeze(assign(items, KIND_ARG_LIST));
 }
 
 function totalWeight(d: Die): number {
@@ -154,11 +160,14 @@ function valueToNewSequence(x: ProgramValue): Sequence {
   switch (x.kind) {
     case KIND.SEQUENCE:
       return x;
-    default: {
+    case KIND.COLLECTION:
+    case KIND.DIE: {
       const die = x.kind === KIND.DIE ? x : collectionSum(x);
       // Conversion of a die to a sequence normalizes the odds of each value
       return sequence(die.map(([value]) => value));
     }
+    default:
+      throw new Error("Invalid ProgramValue");
   }
 }
 
@@ -197,7 +206,7 @@ const NUMBER_DESCENDING = (a: number, b: number) => b - a;
 const MAX_SAFE_NUMBER = 1e300;
 const MAX_ARRAY_LENGTH = 5e6;
 
-function getAllSequences([n, d]: Collection): CollectionItem[] {
+function getAllSequences([n, d]: Collection): [Sequence, number][] {
   const vals = d.map((e) => e[0]);
   const faceCounts = d.map((e) => e[1]);
   const k = vals.length;
@@ -213,7 +222,7 @@ function getAllSequences([n, d]: Collection): CollectionItem[] {
     }
   }
 
-  const results: CollectionItem[] = [];
+  const results: [Sequence, number][] = [];
   const seq: number[] = [];
 
   // Distributes `remaining` dice across faces [idx..k-1]; denom/pow accumulate
@@ -331,6 +340,22 @@ function dDieDie(n: Die, d: Die): Die {
   return die(dieMapFinish(result));
 }
 
+function combineArgList(argList: readonly ArgListItem[]): Die {
+  const result = dieMap();
+  const dice = argList.map(([arg, count]) => [valueToDie(arg), count] as const);
+  const allWeights = dice.map(([die]) => totalWeight(die));
+  const totalResultWeight = product(allWeights) < Number.MAX_SAFE_INTEGER ? lcm(allWeights) : 1;
+  for (let i = 0; i < dice.length; i++) {
+    const [die, count] = dice[i];
+    const weight = allWeights[i];
+    for (const [value, dieCount] of die) {
+      const combinedCount = count * dieCount * (totalResultWeight / weight);
+      dieMapAdd(result, value, combinedCount);
+    }
+  }
+  return die(dieMapFinish(result));
+}
+
 function numberDieOperation(op: number, a: number, b: Die, reverse: boolean): Die {
   const resultMap = dieMap();
   for (const [value, count] of b) {
@@ -372,19 +397,60 @@ function sequenceIndex(seq: Sequence, index: number): number {
   return seq[index - 1];
 }
 
+function returnValue(state: ProgramState, value: ProgramValue): void {
+  const { stack } = state;
+  stack.length = state.fp; // Clear the stack to the frame pointer
+  // Restore the previous state of the program from the stack
+  state.loopIndex = popNumber(stack);
+  state.fp = popNumber(stack);
+  state.pc = popNumber(stack);
+  stack.push(value); // Push the return value onto the stack
+}
+
 export type ProgramState = {
   program: Program;
   stack: ProgramValue[];
   pc: number;
   fp: number;
+  loopIndex: number;
   pcMax: number;
   opCount: number;
+  outputs: Output[];
 };
 
-const MAX_STACK_SIZE = 10000;
+export function newState(program: Program): ProgramState {
+  return {
+    program,
+    stack: [],
+    pc: 0,
+    fp: 0,
+    loopIndex: 0,
+    pcMax: 0,
+    opCount: 0,
+    outputs: [],
+  };
+}
 
-export function execute(state: ProgramState, outputs: Output[], maxOps: number): boolean {
-  const { program, stack } = state;
+function* permutationArgs(
+  args: readonly ProgramValue[],
+  loopIndex: number,
+): Generator<ArgListItem> {
+  let remainingIndex = loopIndex;
+  for (const arg of args) {
+    if (typeof arg === "object" && arg.kind === KIND.ARGLIST) {
+      const argListIndex = remainingIndex % arg.length;
+      yield arg[argListIndex];
+      remainingIndex = Math.floor(remainingIndex / arg.length);
+    } else {
+      yield [arg, 1];
+    }
+  }
+}
+
+const MAX_STACK_SIZE = MAX_ARRAY_LENGTH * 2;
+
+export function execute(state: ProgramState, maxOps: number): boolean {
+  const { program, stack, outputs } = state;
   const { code } = program;
 
   function readPc() {
@@ -459,12 +525,22 @@ export function execute(state: ProgramState, outputs: Output[], maxOps: number):
       }
       case OPCODE.LENGTH: {
         const a = pop(stack);
-        if (typeof a === "number" || a.kind === KIND.DIE) {
+        if (typeof a === "number") {
           stack.push(1);
-        } else if (a.kind === KIND.SEQUENCE) {
-          stack.push(a.length);
         } else {
-          stack.push(a[0]);
+          switch (a.kind) {
+            case KIND.DIE:
+              stack.push(1);
+              break;
+            case KIND.SEQUENCE:
+              stack.push(a.length);
+              break;
+            case KIND.COLLECTION:
+              stack.push(a[0]);
+              break;
+            default:
+              throw new Error("Invalid ProgramValue");
+          }
         }
         break;
       }
@@ -553,35 +629,32 @@ export function execute(state: ProgramState, outputs: Output[], maxOps: number):
         }
         break;
       }
-      case OPCODE.FUNCTION: {
+      case OPCODE.FUNCTION_INIT: {
         const paramCount = readPc();
         if (paramCount != stack.length - state.fp) {
           throw new Error(
             `Function call parameter count mismatch: expected ${paramCount}, got ${stack.length - state.fp}`,
           );
         }
-        const dieCall: boolean[] = Array(paramCount).fill(false);
         for (let i = 0; i < paramCount; i++) {
           const paramKind = readPc() as KIND;
           const { fp } = state;
           const arg = stack[fp + i];
           switch (paramKind) {
             case KIND.NUMBER:
-              if (typeof arg !== "number" && arg.kind !== KIND.SEQUENCE) {
-                dieCall[i] = true;
-                stack[fp + i] = valueToDie(arg);
-              } else {
+              if (typeof arg === "number" || arg.kind === KIND.SEQUENCE) {
                 stack[fp + i] = valueToNumber(arg);
+              } else {
+                stack[fp + i] = argList([...valueToDie(arg)]);
               }
               break;
             case KIND.SEQUENCE:
               if (typeof arg === "number") {
                 stack[fp + i] = sequence([arg]);
-              } else if (arg.kind === KIND.SEQUENCE) {
-                stack[fp + i] = arg;
+              } else if (arg.kind === KIND.COLLECTION || arg.kind === KIND.DIE) {
+                stack[fp + i] = argList(getAllSequences(valueToCollection(arg)));
               } else {
-                dieCall[i] = true;
-                stack[fp + i] = valueToCollection(arg);
+                stack[fp + i] = arg;
               }
               break;
             case KIND.DIE:
@@ -592,8 +665,59 @@ export function execute(state: ProgramState, outputs: Output[], maxOps: number):
               break;
           }
         }
-        if (dieCall.some((isDie) => isDie)) {
-          throw new Error("Not implemented");
+        const permutations = product(
+          stack
+            .slice(state.fp)
+            .map((arg) => (typeof arg === "object" && arg.kind === KIND.ARGLIST ? arg.length : 1)),
+        );
+        switch (permutations) {
+          case 0:
+            returnValue(state, sequence([])); // Return an empty sequence if there are no permutations
+            break;
+          case 1:
+            // Convert any ArgLists to their first value, since there's only one permutation
+            for (let i = state.fp; i < stack.length; i++) {
+              const arg = stack[i];
+              if (typeof arg === "object" && arg.kind === KIND.ARGLIST) {
+                stack[i] = arg[0][0];
+              }
+            }
+            state.pc++; // Skip the function loop if there's only one permutation
+            break;
+          default:
+            if (permutations > MAX_ARRAY_LENGTH) {
+              throw new Error(
+                `Too many permutations: ${permutations}, maximum allowed is ${MAX_ARRAY_LENGTH}`,
+              );
+            }
+            state.loopIndex = 0;
+            break;
+        }
+        break;
+      }
+      case OPCODE.FUNCTION_LOOP: {
+        const args = stack.slice(state.fp, stack.length - state.loopIndex);
+        const argLists = args.filter((arg) => typeof arg === "object" && arg.kind === KIND.ARGLIST);
+        const totalPermutations = product(argLists.map((arg) => arg.length));
+        if (state.loopIndex >= totalPermutations) {
+          const resultList: ArgListItem[] = [];
+          const resultStartIndex = state.fp + args.length;
+          for (let i = 0; i < totalPermutations; i++) {
+            let totalCount = 1;
+            for (const [, count] of permutationArgs(args, i)) {
+              totalCount *= count;
+            }
+            resultList.push([stack[resultStartIndex + i], totalCount]);
+          }
+          const resultDie = combineArgList(resultList);
+          returnValue(state, resultDie);
+        } else {
+          state.loopIndex++;
+          stack.push(state.pc - 1, state.fp, state.loopIndex); // Save the current state for the next iteration
+          for (const [arg] of permutationArgs(args, state.loopIndex)) {
+            stack.push(arg);
+          }
+          state.fp = stack.length - args.length; // Update frame pointer to the new arguments
         }
         break;
       }
@@ -601,17 +725,14 @@ export function execute(state: ProgramState, outputs: Output[], maxOps: number):
         const argCount = readPc();
         const functionPtr = readPc();
         // Save the frame pointer and return address
-        stack.splice(stack.length - argCount, 0, state.pc, state.fp);
+        stack.splice(stack.length - argCount, 0, state.pc, state.fp, state.loopIndex);
         state.fp = stack.length - argCount;
         state.pc = functionPtr; // Jump to the function
         break;
       }
       case OPCODE.RETURN: {
         const value = pop(stack);
-        stack.length = state.fp; // Clear the stack to the frame pointer
-        state.fp = popNumber(stack); // Restore the previous frame pointer
-        state.pc = popNumber(stack); // Restore the instruction pointer
-        stack.push(value); // Push the return value onto the stack
+        returnValue(state, value);
         break;
       }
       case OPCODE.LOOP_INIT: {
@@ -646,26 +767,29 @@ export function execute(state: ProgramState, outputs: Output[], maxOps: number):
         break;
       }
       case OPCODE.OUTPUT: {
+        const outputValue = valueToDie(pop(stack));
+        outputs.push(["", outputValue]);
+        break;
+      }
+      case OPCODE.OUTPUT_NAMED: {
         const varCount = readPc();
-        const outputNames = varCount === -1 ? null : [...program.outputNames[readPc()]];
+        const outputNames = [...program.outputNames[readPc()]];
 
         let finalName = "";
-        if (outputNames) {
-          const outputValues: ProgramValue[] = [];
-          for (let i = 0; i < varCount; i++) {
-            outputValues.push(pop(stack));
-          }
-          do {
-            const namePart = outputNames.shift();
-            if (namePart != null) {
-              finalName += namePart;
-            }
-            const valuePart = outputValues.shift();
-            if (valuePart != null) {
-              finalName += valueToString(valuePart);
-            }
-          } while (outputNames.length > 0 && outputValues.length > 0);
+        const outputValues: ProgramValue[] = [];
+        for (let i = 0; i < varCount; i++) {
+          outputValues.push(pop(stack));
         }
+        do {
+          const namePart = outputNames.shift();
+          if (namePart != null) {
+            finalName += namePart;
+          }
+          const valuePart = outputValues.shift();
+          if (valuePart != null) {
+            finalName += valueToString(valuePart);
+          }
+        } while (outputNames.length > 0 && outputValues.length > 0);
         const outputValue = valueToDie(pop(stack));
         outputs.push([finalName, outputValue]);
         break;
@@ -687,15 +811,15 @@ export function getDebugInfo(state: ProgramState): DebugInfo[] {
     ) ?? [0, 0, "(unknown)", []];
     const frameVariables = variables.map((name, index) => [name, state.stack[fp + index]] as const);
     result.push({
-      location: state.program.debugLocations[pc - 1] ?? [-1, -1],
+      location: state.program.debugLocations[pc - 1] ?? [-1],
       functionName,
       variables: frameVariables,
     });
     if (fp <= 0) {
       break;
     }
-    pc = state.stack[fp - 2] as number;
-    fp = state.stack[fp - 1] as number;
+    pc = state.stack[fp - 3] as number;
+    fp = state.stack[fp - 2] as number;
   }
   return result;
 }
@@ -710,20 +834,12 @@ if (import.meta.vitest) {
       debugFrames: [],
       outputNames: [],
     };
-    const state: ProgramState = {
-      program,
-      stack: [],
-      pc: 0,
-      fp: 0,
-      pcMax: 0,
-      opCount: 0,
-    };
-    const outputs: Output[] = [];
-    const finished = execute(state, outputs, 1000);
+    const state = newState(program);
+    const finished = execute(state, 1000);
     if (!finished) {
       throw new Error("Program did not finish executing");
     }
-    expect(outputs[0][1]).toEqual(valueToDie(expectedOutput));
+    expect(state.outputs[0][1]).toEqual(valueToDie(expectedOutput));
   }
 
   const {
@@ -758,12 +874,12 @@ if (import.meta.vitest) {
 
   suite("opcodes", () => {
     test("ADD", () => {
-      runCode([IMMEDIATE, 2, IMMEDIATE, 3, ADD, OUTPUT, -1], 5);
+      runCode([IMMEDIATE, 2, IMMEDIATE, 3, ADD, OUTPUT], 5);
     });
 
     test("ADD number,die", () => {
       runCode(
-        [IMMEDIATE, 2, IMMEDIATE, 3, UNARY_D, ADD, OUTPUT, -1],
+        [IMMEDIATE, 2, IMMEDIATE, 3, UNARY_D, ADD, OUTPUT],
         die([
           [3, 1],
           [4, 1],
@@ -773,85 +889,85 @@ if (import.meta.vitest) {
     });
 
     test("SUBTRACT", () => {
-      runCode([IMMEDIATE, 5, IMMEDIATE, 3, SUBTRACT, OUTPUT, -1], 2);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, SUBTRACT, OUTPUT], 2);
     });
 
     test("MULTIPLY", () => {
-      runCode([IMMEDIATE, 4, IMMEDIATE, 3, MULTIPLY, OUTPUT, -1], 12);
+      runCode([IMMEDIATE, 4, IMMEDIATE, 3, MULTIPLY, OUTPUT], 12);
     });
 
     test("DIVIDE", () => {
-      runCode([IMMEDIATE, 10, IMMEDIATE, 3, DIVIDE, OUTPUT, -1], 3);
+      runCode([IMMEDIATE, 10, IMMEDIATE, 3, DIVIDE, OUTPUT], 3);
     });
 
     test("EXPONENT", () => {
-      runCode([IMMEDIATE, 2, IMMEDIATE, 3, EXPONENT, OUTPUT, -1], 8);
+      runCode([IMMEDIATE, 2, IMMEDIATE, 3, EXPONENT, OUTPUT], 8);
     });
 
     test("EQUAL", () => {
-      runCode([IMMEDIATE, 5, IMMEDIATE, 5, EQUAL, OUTPUT, -1], 1);
-      runCode([IMMEDIATE, 5, IMMEDIATE, 3, EQUAL, OUTPUT, -1], 0);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 5, EQUAL, OUTPUT], 1);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, EQUAL, OUTPUT], 0);
     });
 
     test("NOT_EQUAL", () => {
-      runCode([IMMEDIATE, 5, IMMEDIATE, 3, NOT_EQUAL, OUTPUT, -1], 1);
-      runCode([IMMEDIATE, 5, IMMEDIATE, 5, NOT_EQUAL, OUTPUT, -1], 0);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, NOT_EQUAL, OUTPUT], 1);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 5, NOT_EQUAL, OUTPUT], 0);
     });
 
     test("LESS_THAN", () => {
-      runCode([IMMEDIATE, 3, IMMEDIATE, 5, LESS_THAN, OUTPUT, -1], 1);
-      runCode([IMMEDIATE, 5, IMMEDIATE, 3, LESS_THAN, OUTPUT, -1], 0);
+      runCode([IMMEDIATE, 3, IMMEDIATE, 5, LESS_THAN, OUTPUT], 1);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, LESS_THAN, OUTPUT], 0);
     });
 
     test("GREATER_THAN", () => {
-      runCode([IMMEDIATE, 5, IMMEDIATE, 3, GREATER_THAN, OUTPUT, -1], 1);
-      runCode([IMMEDIATE, 3, IMMEDIATE, 5, GREATER_THAN, OUTPUT, -1], 0);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, GREATER_THAN, OUTPUT], 1);
+      runCode([IMMEDIATE, 3, IMMEDIATE, 5, GREATER_THAN, OUTPUT], 0);
     });
 
     test("LESS_THAN_EQUAL", () => {
-      runCode([IMMEDIATE, 3, IMMEDIATE, 5, LESS_THAN_EQUAL, OUTPUT, -1], 1);
-      runCode([IMMEDIATE, 5, IMMEDIATE, 5, LESS_THAN_EQUAL, OUTPUT, -1], 1);
-      runCode([IMMEDIATE, 5, IMMEDIATE, 3, LESS_THAN_EQUAL, OUTPUT, -1], 0);
+      runCode([IMMEDIATE, 3, IMMEDIATE, 5, LESS_THAN_EQUAL, OUTPUT], 1);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 5, LESS_THAN_EQUAL, OUTPUT], 1);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, LESS_THAN_EQUAL, OUTPUT], 0);
     });
 
     test("GREATER_THAN_EQUAL", () => {
-      runCode([IMMEDIATE, 5, IMMEDIATE, 3, GREATER_THAN_EQUAL, OUTPUT, -1], 1);
-      runCode([IMMEDIATE, 5, IMMEDIATE, 5, GREATER_THAN_EQUAL, OUTPUT, -1], 1);
-      runCode([IMMEDIATE, 3, IMMEDIATE, 5, GREATER_THAN_EQUAL, OUTPUT, -1], 0);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, GREATER_THAN_EQUAL, OUTPUT], 1);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 5, GREATER_THAN_EQUAL, OUTPUT], 1);
+      runCode([IMMEDIATE, 3, IMMEDIATE, 5, GREATER_THAN_EQUAL, OUTPUT], 0);
     });
 
     test("AND", () => {
-      runCode([IMMEDIATE, 1, IMMEDIATE, 1, AND, OUTPUT, -1], 1);
-      runCode([IMMEDIATE, 1, IMMEDIATE, 0, AND, OUTPUT, -1], 0);
-      runCode([IMMEDIATE, 0, IMMEDIATE, 1, AND, OUTPUT, -1], 0);
-      runCode([IMMEDIATE, 0, IMMEDIATE, 0, AND, OUTPUT, -1], 0);
+      runCode([IMMEDIATE, 1, IMMEDIATE, 1, AND, OUTPUT], 1);
+      runCode([IMMEDIATE, 1, IMMEDIATE, 0, AND, OUTPUT], 0);
+      runCode([IMMEDIATE, 0, IMMEDIATE, 1, AND, OUTPUT], 0);
+      runCode([IMMEDIATE, 0, IMMEDIATE, 0, AND, OUTPUT], 0);
     });
 
     test("OR", () => {
-      runCode([IMMEDIATE, 1, IMMEDIATE, 1, OR, OUTPUT, -1], 1);
-      runCode([IMMEDIATE, 1, IMMEDIATE, 0, OR, OUTPUT, -1], 1);
-      runCode([IMMEDIATE, 0, IMMEDIATE, 1, OR, OUTPUT, -1], 1);
-      runCode([IMMEDIATE, 0, IMMEDIATE, 0, OR, OUTPUT, -1], 0);
+      runCode([IMMEDIATE, 1, IMMEDIATE, 1, OR, OUTPUT], 1);
+      runCode([IMMEDIATE, 1, IMMEDIATE, 0, OR, OUTPUT], 1);
+      runCode([IMMEDIATE, 0, IMMEDIATE, 1, OR, OUTPUT], 1);
+      runCode([IMMEDIATE, 0, IMMEDIATE, 0, OR, OUTPUT], 0);
     });
 
     test("SEQUENCE", () => {
-      runCode([IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, OUTPUT, -1], 6);
-      runCode([IMMEDIATE, 3, UNARY_D, SEQUENCE, 1, OUTPUT, -1], 6);
+      runCode([IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, OUTPUT], 6);
+      runCode([IMMEDIATE, 3, UNARY_D, SEQUENCE, 1, OUTPUT], 6);
     });
 
     test("RANGE", () => {
-      runCode([IMMEDIATE, 1, IMMEDIATE, 3, RANGE, OUTPUT, -1], 6);
-      runCode([IMMEDIATE, 4, IMMEDIATE, 7, RANGE, LENGTH, OUTPUT, -1], 4);
+      runCode([IMMEDIATE, 1, IMMEDIATE, 3, RANGE, OUTPUT], 6);
+      runCode([IMMEDIATE, 4, IMMEDIATE, 7, RANGE, LENGTH, OUTPUT], 4);
     });
 
     test("LENGTH", () => {
-      runCode([IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, LENGTH, OUTPUT, -1], 3);
-      runCode([IMMEDIATE, 3, IMMEDIATE, 6, D, LENGTH, OUTPUT, -1], 3);
+      runCode([IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, LENGTH, OUTPUT], 3);
+      runCode([IMMEDIATE, 3, IMMEDIATE, 6, D, LENGTH, OUTPUT], 3);
     });
 
     test("D number,number", () => {
       runCode(
-        [IMMEDIATE, 2, IMMEDIATE, 4, D, OUTPUT, -1],
+        [IMMEDIATE, 2, IMMEDIATE, 4, D, OUTPUT],
         die([
           [2, 1],
           [3, 2],
@@ -866,7 +982,7 @@ if (import.meta.vitest) {
 
     test("D number,sequence", () => {
       runCode(
-        [IMMEDIATE, 2, IMMEDIATE, 3, IMMEDIATE, 5, SEQUENCE, 2, D, OUTPUT, -1],
+        [IMMEDIATE, 2, IMMEDIATE, 3, IMMEDIATE, 5, SEQUENCE, 2, D, OUTPUT],
         die([
           [6, 1],
           [8, 2],
@@ -877,22 +993,7 @@ if (import.meta.vitest) {
 
     test("D die,die", () => {
       runCode(
-        [
-          IMMEDIATE,
-          0,
-          IMMEDIATE,
-          0,
-          IMMEDIATE,
-          1,
-          SEQUENCE,
-          3,
-          UNARY_D,
-          IMMEDIATE,
-          2,
-          D,
-          OUTPUT,
-          -1,
-        ],
+        [IMMEDIATE, 0, IMMEDIATE, 0, IMMEDIATE, 1, SEQUENCE, 3, UNARY_D, IMMEDIATE, 2, D, OUTPUT],
         die([
           [0, 4],
           [1, 1],
@@ -901,7 +1002,7 @@ if (import.meta.vitest) {
       );
 
       runCode(
-        [IMMEDIATE, 2, IMMEDIATE, 2, D, IMMEDIATE, 2, D, OUTPUT, -1],
+        [IMMEDIATE, 2, IMMEDIATE, 2, D, IMMEDIATE, 2, D, OUTPUT],
         die([
           [2, 4],
           [3, 12],
@@ -916,7 +1017,7 @@ if (import.meta.vitest) {
 
     test("UNARY_D", () => {
       runCode(
-        [IMMEDIATE, 3, UNARY_D, OUTPUT, -1],
+        [IMMEDIATE, 3, UNARY_D, OUTPUT],
         die([
           [1, 1],
           [2, 1],
@@ -926,23 +1027,17 @@ if (import.meta.vitest) {
     });
 
     test("UNARY_MINUS", () => {
-      runCode([IMMEDIATE, 5, UNARY_MINUS, OUTPUT, -1], -5);
+      runCode([IMMEDIATE, 5, UNARY_MINUS, OUTPUT], -5);
     });
 
     test("AT", () => {
-      runCode(
-        [IMMEDIATE, 2, IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, AT, OUTPUT, -1],
-        2,
-      );
-      runCode(
-        [IMMEDIATE, 4, IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, AT, OUTPUT, -1],
-        0,
-      );
+      runCode([IMMEDIATE, 2, IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, AT, OUTPUT], 2);
+      runCode([IMMEDIATE, 4, IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, AT, OUTPUT], 0);
     });
 
     test("AT collection", () => {
       runCode(
-        [IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, D, AT, OUTPUT, -1],
+        [IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, D, AT, OUTPUT],
         die([
           [1, 1],
           [2, 3],
@@ -980,7 +1075,6 @@ if (import.meta.vitest) {
         G_LOAD,
         0,
         OUTPUT,
-        -1,
       ],
       6,
     );

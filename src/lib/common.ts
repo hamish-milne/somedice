@@ -47,9 +47,11 @@ export const OPCODE = freeze({
   LOOP_INIT: 31,
   LOOP_START: 32,
   OUTPUT: 33,
-  IMMEDIATE: 34,
-  FUNCTION: 35,
-  RESERVE: 36,
+  OUTPUT_NAMED: 34,
+  IMMEDIATE: 35,
+  FUNCTION_INIT: 36,
+  FUNCTION_LOOP: 37,
+  RESERVE: 38,
 });
 export type OPCODE = ValueOf<typeof OPCODE>;
 
@@ -59,6 +61,7 @@ export const KIND = freeze({
   SEQUENCE: 2,
   DIE: 3,
   COLLECTION: 4,
+  ARGLIST: 5,
 });
 export type KIND = ValueOf<typeof KIND>;
 
@@ -80,11 +83,14 @@ export type Program = {
 export type Sequence = readonly number[] & { readonly kind: typeof KIND.SEQUENCE };
 export type DieItem = readonly [value: number, count: number];
 export type Die = readonly DieItem[] & { readonly kind: typeof KIND.DIE };
-export type CollectionItem = readonly [sequence: Sequence, count: number];
 export type Collection = readonly [count: number, die: Die] & {
   readonly kind: typeof KIND.COLLECTION;
 };
-export type ProgramValue = number | Sequence | Die | Collection;
+export type ArgListItem = readonly [arg: ProgramValue, count: number];
+export type ArgList = readonly ArgListItem[] & {
+  readonly kind: typeof KIND.ARGLIST;
+};
+export type ProgramValue = number | Sequence | Die | Collection | ArgList;
 
 const MAX_STRING_ITEMS = 10;
 
@@ -103,6 +109,13 @@ export function valueToString(value: ProgramValue): string {
         .join(",")}${ellipsis}}`;
     case KIND.COLLECTION:
       return `${value[0]}d${valueToString(value[1])}`;
+    case KIND.ARGLIST:
+      return `<${value
+        .slice(0, MAX_STRING_ITEMS)
+        .map(([seq, count]) => `${valueToString(seq)}:${count}`)
+        .join(",")}${ellipsis}>`;
+    default:
+      return "<unknown>";
   }
 }
 

@@ -145,7 +145,7 @@ function Main() {
   const displayState = useWatch(store, "displayState");
 
   return (
-    <div className="h-full min-w-85 flex flex-col bg-gray-100">
+    <div className="h-full min-w-86 flex flex-col bg-gray-100">
       <RunnerManager />
       {/* Header */}
       <Header />

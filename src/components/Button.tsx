@@ -19,7 +19,7 @@ export function Button({
 }: ButtonProps & ComponentProps<"button">) {
   return (
     <button
-      className={`px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variantStyles[variant]} ${className}`}
+      className={`px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-nowrap ${variantStyles[variant]} ${className}`}
       {...props}
     />
   );
@@ -37,7 +37,7 @@ export const RadioButton = forwardRef<HTMLInputElement, ButtonProps & ComponentP
   ) => {
     return (
       <label
-        className={`appearance-none px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variantStyles[variant]} ${className}`}
+        className={`appearance-none px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-nowrap ${variantStyles[variant]} ${className}`}
       >
         <input type="radio" className="invisible absolute inset-0" ref={ref} {...props} />
         <span className="contents absolute">{children}</span>
