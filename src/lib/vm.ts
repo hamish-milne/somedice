@@ -731,11 +731,11 @@ export function execute(state: ProgramState, maxOps: number): boolean {
           const resultDie = combineArgList(resultList);
           returnValue(state, resultDie);
         } else {
-          state.loopIndex++;
-          stack.push(state.pc - 1, state.fp, state.loopIndex); // Save the current state for the next iteration
+          stack.push(state.pc - 1, state.fp, state.loopIndex + 1); // Save the current state for the next iteration
           for (const [arg] of permutationArgs(args, state.loopIndex)) {
             stack.push(arg);
           }
+          state.loopIndex++;
           state.fp = stack.length - args.length; // Update frame pointer to the new arguments
         }
         break;
@@ -759,20 +759,21 @@ export function execute(state: ProgramState, maxOps: number): boolean {
         if (typeof sequence === "number" || sequence.kind !== KIND.SEQUENCE) {
           throw new Error("Expected a sequence for loop");
         }
-        stack.push(0); // Initialize loop index
+        stack.push(state.loopIndex); // Save the current loop index
+        state.loopIndex = 0; // Reset loop index for the new loop
         break;
       }
       case OPCODE.LOOP_START: {
         const loopEnd = readPc();
-        const loopIndex = popNumber(stack);
-        const sequence = stack[stack.length - 1];
+        const sequence = stack[stack.length - 2];
         if (typeof sequence === "number" || sequence.kind !== KIND.SEQUENCE) {
           throw new Error("Expected a sequence for loop");
         }
-        if (loopIndex < sequence.length) {
-          stack.push(loopIndex + 1); // Increment loop index
-          stack.push(sequence[loopIndex]); // Push current value
+        if (state.loopIndex < sequence.length) {
+          stack.push(sequence[state.loopIndex]); // Push current value
+          state.loopIndex++; // Increment loop index for the next iteration
         } else {
+          state.loopIndex = popNumber(stack); // Restore previous loop index
           stack.pop(); // Pop the sequence
           state.pc += loopEnd; // Jump to loop end
         }
@@ -864,6 +865,7 @@ if (import.meta.vitest) {
   const {
     IMMEDIATE,
     OUTPUT,
+    OUTPUT_NAMED,
     ADD,
     SUBTRACT,
     MULTIPLY,
@@ -877,6 +879,7 @@ if (import.meta.vitest) {
     GREATER_THAN_EQUAL,
     AND,
     OR,
+    NOT,
     D,
     SEQUENCE,
     LENGTH,
@@ -889,6 +892,13 @@ if (import.meta.vitest) {
     G_STORE,
     JUMP,
     UNARY_MINUS,
+    RESERVE,
+    L_LOAD,
+    L_STORE,
+    FUNCTION_INIT,
+    FUNCTION_LOOP,
+    CALL,
+    RETURN,
   } = OPCODE;
 
   suite("opcodes", () => {
@@ -902,6 +912,29 @@ if (import.meta.vitest) {
         die([
           [3, 1],
           [4, 1],
+          [5, 1],
+        ]),
+      );
+    });
+
+    test("ADD die,number", () => {
+      runCode(
+        [IMMEDIATE, 3, UNARY_D, IMMEDIATE, 2, ADD, OUTPUT],
+        die([
+          [3, 1],
+          [4, 1],
+          [5, 1],
+        ]),
+      );
+    });
+
+    test("ADD die,die", () => {
+      runCode(
+        [IMMEDIATE, 2, UNARY_D, IMMEDIATE, 3, UNARY_D, ADD, OUTPUT],
+        die([
+          [2, 1],
+          [3, 2],
+          [4, 2],
           [5, 1],
         ]),
       );
@@ -1045,8 +1078,21 @@ if (import.meta.vitest) {
       );
     });
 
+    test("NOT", () => {
+      runCode([IMMEDIATE, 1, NOT, OUTPUT], 0);
+      runCode([IMMEDIATE, 0, NOT, OUTPUT], 1);
+    });
+
     test("UNARY_MINUS", () => {
       runCode([IMMEDIATE, 5, UNARY_MINUS, OUTPUT], -5);
+      runCode(
+        [IMMEDIATE, 3, UNARY_D, UNARY_MINUS, OUTPUT],
+        die([
+          [-3, 1],
+          [-2, 1],
+          [-1, 1],
+        ]),
+      );
     });
 
     test("AT", () => {
@@ -1063,6 +1109,10 @@ if (import.meta.vitest) {
           [3, 5],
         ]),
       );
+    });
+
+    test("L_STORE, L_LOAD", () => {
+      runCode([RESERVE, 1, IMMEDIATE, 5, L_STORE, 0, L_LOAD, 0, OUTPUT], 5);
     });
   });
 
@@ -1097,5 +1147,103 @@ if (import.meta.vitest) {
       ],
       6,
     );
+  });
+
+  test("simple function", () => {
+    runCode(
+      [
+        IMMEDIATE,
+        5,
+        IMMEDIATE,
+        3,
+        CALL,
+        2,
+        9,
+        JUMP,
+        7,
+        FUNCTION_INIT,
+        2,
+        KIND.NUMBER,
+        KIND.NUMBER,
+        FUNCTION_LOOP,
+        ADD,
+        RETURN,
+        OUTPUT,
+      ],
+      8,
+    );
+  });
+
+  test("function with permutations", () => {
+    runCode(
+      [
+        // arguments: d2, 3, 2d2
+        IMMEDIATE,
+        2,
+        UNARY_D,
+        IMMEDIATE,
+        3,
+        IMMEDIATE,
+        2,
+        IMMEDIATE,
+        2,
+        D,
+        CALL,
+        3,
+        15,
+        JUMP,
+        9,
+        FUNCTION_INIT,
+        3,
+        KIND.NUMBER,
+        KIND.DIE,
+        KIND.SEQUENCE,
+        FUNCTION_LOOP,
+        ADD,
+        ADD,
+        RETURN,
+        OUTPUT,
+      ],
+      die([
+        [6, 1],
+        [7, 3],
+        [8, 3],
+        [9, 1],
+      ]),
+    );
+  });
+
+  test("named output", () => {
+    const code = [
+      IMMEDIATE,
+      2,
+      IMMEDIATE,
+      1,
+      OUTPUT_NAMED,
+      1,
+      0,
+      IMMEDIATE,
+      3,
+      IMMEDIATE,
+      2,
+      OUTPUT_NAMED,
+      1,
+      0,
+    ];
+    const program: Program = {
+      code,
+      debugLocations: [],
+      debugFrames: [],
+      outputNames: [["Result ", ":"]],
+    };
+    const state = newState(program);
+    const finished = execute(state, 1000);
+    if (!finished) {
+      throw new Error("Program did not finish executing");
+    }
+    expect(state.outputs).toEqual([
+      ["Result 1", die([[2, 1]])],
+      ["Result 2", die([[3, 1]])],
+    ]);
   });
 }
