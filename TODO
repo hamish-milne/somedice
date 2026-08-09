@@ -1,7 +1,8 @@
 Missing features:
   ☐ Index into number
   ☐ Sequence index sums all results
-  ☐ die-die operations
+  ✔ die-die operations @done(26-08-09 16:19)
+  ☐ Sequence comparison
 Misc:
   ☐ Die -> DIE_SIMPLE, DIE_DISCRETE, and DIE_NORM
   ✔ Encode argcount in OPCODE.CALL; in FUNCTION use fp to recover it @done(26-08-07 17:05)

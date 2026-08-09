@@ -9,9 +9,9 @@ import {
   type DieItem,
   type Output,
   type Program,
-  type ProgramValue,
   type Sequence,
   type ArgList,
+  type ProgramValueAny,
 } from "./common";
 
 const { freeze, assign } = Object;
@@ -118,7 +118,7 @@ function dNumber(d: number): Die {
   return die(arrayFrom({ length: d }, (_, i) => dieItem(i + 1, 1)));
 }
 
-function valueToDie(x: ProgramValue): Die {
+function valueToDie(x: ProgramValueAny): Die {
   if (typeof x === "number") {
     return die([[x, 1]]);
   }
@@ -133,7 +133,7 @@ function valueToDie(x: ProgramValue): Die {
   throw new Error("Invalid ProgramValue");
 }
 
-function valueToNewDie(x: ProgramValue): Die {
+function valueToNewDie(x: ProgramValueAny): Die {
   if (typeof x === "number") {
     return dNumber(x);
   }
@@ -153,7 +153,7 @@ function valueToNewDie(x: ProgramValue): Die {
   throw new Error("Invalid ProgramValue");
 }
 
-function valueToNewSequence(x: ProgramValue): Sequence {
+function valueToNewSequence(x: ProgramValueAny): Sequence {
   if (typeof x === "number") {
     return sequence([x]);
   }
@@ -171,7 +171,7 @@ function valueToNewSequence(x: ProgramValue): Sequence {
   }
 }
 
-function valueToNumber(x: ProgramValue): number {
+function valueToNumber(x: ProgramValueAny): number {
   if (typeof x === "number") {
     return x;
   }
@@ -182,7 +182,7 @@ function valueToNumber(x: ProgramValue): number {
   throw new Error("Expected a number or sequence, but got a die or collection");
 }
 
-function valueToNumberOrDie(x: ProgramValue): number | Die {
+function valueToNumberOrDie(x: ProgramValueAny): number | Die {
   return typeof x === "number" ? x : x.kind === KIND.SEQUENCE ? sum(x) : valueToDie(x);
 }
 
@@ -365,6 +365,17 @@ function numberDieOperation(op: number, a: number, b: Die, reverse: boolean): Di
   return die(dieMapFinish(resultMap));
 }
 
+function dieDieOperation(op: number, a: Die, b: Die): Die {
+  const resultMap = dieMap();
+  for (const [valueA, countA] of a) {
+    for (const [valueB, countB] of b) {
+      const newValue = numberOperation(op, valueA, valueB);
+      dieMapAdd(resultMap, newValue, countA * countB);
+    }
+  }
+  return die(dieMapFinish(resultMap));
+}
+
 function dieUnaryOperation(op: number, d: Die): Die {
   const resultMap = dieMap();
   for (const [value, count] of d) {
@@ -374,7 +385,7 @@ function dieUnaryOperation(op: number, d: Die): Die {
   return die(dieMapFinish(resultMap));
 }
 
-function pop(stack: ProgramValue[]): ProgramValue {
+function pop(stack: ProgramValueAny[]): ProgramValueAny {
   const value = stack.pop();
   if (value == null) {
     throw new Error("Stack underflow");
@@ -382,7 +393,7 @@ function pop(stack: ProgramValue[]): ProgramValue {
   return value;
 }
 
-function popNumber(stack: ProgramValue[]): number {
+function popNumber(stack: ProgramValueAny[]): number {
   const value = pop(stack);
   if (typeof value !== "number") {
     throw new Error("Expected a number on the stack");
@@ -397,7 +408,7 @@ function sequenceIndex(seq: Sequence, index: number): number {
   return seq[index - 1];
 }
 
-function returnValue(state: ProgramState, value: ProgramValue): void {
+function returnValue(state: ProgramState, value: ProgramValueAny): void {
   const { stack } = state;
   stack.length = state.fp; // Clear the stack to the frame pointer
   // Restore the previous state of the program from the stack
@@ -409,7 +420,7 @@ function returnValue(state: ProgramState, value: ProgramValue): void {
 
 export type ProgramState = {
   program: Program;
-  stack: ProgramValue[];
+  stack: ProgramValueAny[];
   pc: number;
   fp: number;
   loopIndex: number;
@@ -432,7 +443,7 @@ export function newState(program: Program): ProgramState {
 }
 
 function* permutationArgs(
-  args: readonly ProgramValue[],
+  args: readonly ProgramValueAny[],
   loopIndex: number,
 ): Generator<ArgListItem> {
   let remainingIndex = loopIndex;
@@ -491,10 +502,14 @@ export function execute(state: ProgramState, maxOps: number): boolean {
         const a = valueToNumberOrDie(pop(stack));
         if (typeof a === "number" && typeof b === "number") {
           stack.push(numberOperation(opcode, a, b));
-        } else if (typeof a === "number") {
-          stack.push(numberDieOperation(opcode, a, b as Die, false));
-        } else if (typeof b === "number") {
+        } else if (typeof a === "number" && typeof b !== "number") {
+          stack.push(numberDieOperation(opcode, a, b, false));
+        } else if (typeof a !== "number" && typeof b === "number") {
           stack.push(numberDieOperation(opcode, b, a, true));
+        } else if (typeof a !== "number" && typeof b !== "number") {
+          stack.push(dieDieOperation(opcode, a, b));
+        } else {
+          throw new Error();
         }
         break;
       }
@@ -707,7 +722,11 @@ export function execute(state: ProgramState, maxOps: number): boolean {
             for (const [, count] of permutationArgs(args, i)) {
               totalCount *= count;
             }
-            resultList.push([stack[resultStartIndex + i], totalCount]);
+            const resultValue = stack[resultStartIndex + i];
+            if (typeof resultValue === "object" && resultValue.kind === KIND.ARGLIST) {
+              throw new Error("Unexpected ArgList in function result");
+            }
+            resultList.push([resultValue, totalCount]);
           }
           const resultDie = combineArgList(resultList);
           returnValue(state, resultDie);
@@ -776,7 +795,7 @@ export function execute(state: ProgramState, maxOps: number): boolean {
         const outputNames = [...program.outputNames[readPc()]];
 
         let finalName = "";
-        const outputValues: ProgramValue[] = [];
+        const outputValues: ProgramValueAny[] = [];
         for (let i = 0; i < varCount; i++) {
           outputValues.push(pop(stack));
         }

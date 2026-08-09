@@ -10,11 +10,11 @@ export function StatusBar() {
   const programSize = useWatch(store, "programSize");
 
   const onStart = useCallback(() => {
-    patch(store as any, { runState: "starting" });
+    patch(store, { runState: "starting" });
   }, [store]);
 
   const onCancel = useCallback(() => {
-    patch(store as any, { runState: "canceling" });
+    patch(store, { runState: "canceling" });
   }, [store]);
 
   return (

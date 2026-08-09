@@ -90,11 +90,12 @@ export type ArgListItem = readonly [arg: ProgramValue, count: number];
 export type ArgList = readonly ArgListItem[] & {
   readonly kind: typeof KIND.ARGLIST;
 };
-export type ProgramValue = number | Sequence | Die | Collection | ArgList;
+export type ProgramValue = number | Sequence | Die | Collection;
+export type ProgramValueAny = ProgramValue | ArgList;
 
 const MAX_STRING_ITEMS = 10;
 
-export function valueToString(value: ProgramValue): string {
+export function valueToString(value: ProgramValueAny): string {
   if (typeof value === "number") {
     return value.toString();
   }
@@ -124,7 +125,7 @@ export type Output = [name: string, value: Die];
 export type DebugInfo = {
   location: Location;
   functionName: string;
-  variables: readonly (readonly [name: string, value: ProgramValue])[];
+  variables: readonly (readonly [name: string, value: ProgramValueAny])[];
 };
 
 export abstract class BaseError extends Error {
