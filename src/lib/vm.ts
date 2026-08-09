@@ -204,7 +204,7 @@ function product(n: readonly number[]): number {
 const NUMBER_DESCENDING = (a: number, b: number) => b - a;
 
 const MAX_SAFE_NUMBER = 1e300;
-const MAX_ARRAY_LENGTH = 5e6;
+const MAX_ARRAY_LENGTH = 5e8;
 
 function getAllSequences([n, d]: Collection): [Sequence, number][] {
   const vals = d.map((e) => e[0]);
@@ -563,7 +563,15 @@ export function execute(state: ProgramState, maxOps: number): boolean {
         const a = pop(stack);
         const index = valueToNumber(pop(stack));
         if (typeof a === "number") {
-          throw new Error("Cannot index into a number");
+          // Index by the digit position of the number (1-based)
+          const nDigits = Math.floor(Math.log10(Math.abs(a))) + 1;
+          if (index < 1 || index > nDigits) {
+            stack.push(0);
+          } else {
+            const digit = Math.floor(Math.abs(a) / 10 ** (nDigits - index)) % 10;
+            stack.push(digit);
+          }
+          break;
         }
         switch (a.kind) {
           case KIND.SEQUENCE: {
@@ -891,6 +899,7 @@ if (import.meta.vitest) {
     G_LOAD,
     G_STORE,
     JUMP,
+    JUMP_IF_FALSE,
     UNARY_MINUS,
     RESERVE,
     L_LOAD,
@@ -1095,7 +1104,7 @@ if (import.meta.vitest) {
       );
     });
 
-    test("AT", () => {
+    test("AT sequence", () => {
       runCode([IMMEDIATE, 2, IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, AT, OUTPUT], 2);
       runCode([IMMEDIATE, 4, IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, AT, OUTPUT], 0);
     });
@@ -1109,6 +1118,10 @@ if (import.meta.vitest) {
           [3, 5],
         ]),
       );
+    });
+
+    test("AT number", () => {
+      runCode([IMMEDIATE, 2, IMMEDIATE, 123, AT, OUTPUT], 2);
     });
 
     test("L_STORE, L_LOAD", () => {
@@ -1245,5 +1258,27 @@ if (import.meta.vitest) {
       ["Result 1", die([[2, 1]])],
       ["Result 2", die([[3, 1]])],
     ]);
+  });
+
+  test("conditional", () => {
+    runCode(
+      [
+        IMMEDIATE,
+        5,
+        IMMEDIATE,
+        3,
+        LESS_THAN,
+        JUMP_IF_FALSE,
+        4,
+        IMMEDIATE,
+        1,
+        JUMP,
+        3,
+        IMMEDIATE,
+        7,
+        OUTPUT,
+      ],
+      7,
+    );
   });
 }

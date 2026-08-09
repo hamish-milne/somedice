@@ -65,11 +65,13 @@ function outputsToChartData(outputs: Output[], displayMode: DisplayMode): ChartD
       case "atLeast":
         for (let i = points.length - 2; i >= 0; i--) {
           points[i].y += points[i + 1].y;
+          points[i].y = Math.min(points[i].y, 100);
         }
         break;
       case "atMost":
         for (let i = 1; i < points.length; i++) {
           points[i].y += points[i - 1].y;
+          points[i].y = Math.min(points[i].y, 100);
         }
         break;
       default:
