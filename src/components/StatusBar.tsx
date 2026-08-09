@@ -1,6 +1,6 @@
 import { patch, useStore, useWatch } from "tinystate";
 import { Button } from "./Button";
-import { useCallback } from "react";
+import { useCallback } from "preact/hooks";
 
 export function StatusBar() {
   const store = useStore();
@@ -10,11 +10,11 @@ export function StatusBar() {
   const programSize = useWatch(store, "programSize");
 
   const onStart = useCallback(() => {
-    patch(store, { runState: "starting" });
+    patch(store as any, { runState: "starting" });
   }, [store]);
 
   const onCancel = useCallback(() => {
-    patch(store, { runState: "canceling" });
+    patch(store as any, { runState: "canceling" });
   }, [store]);
 
   return (

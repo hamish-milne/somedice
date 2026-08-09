@@ -5,7 +5,19 @@ import mdx from "@mdx-js/rollup";
 import remarkGfm from "remark-gfm";
 
 export default defineConfig({
-  plugins: [{ enforce: "pre", ...mdx({ remarkPlugins: [remarkGfm] }) }, react(), tailwindcss()],
+  plugins: [
+    { enforce: "pre", ...mdx({ remarkPlugins: [remarkGfm] }) },
+    react({
+      jsxImportSource: "preact",
+    }),
+    tailwindcss(),
+  ],
+  resolve: {
+    alias: {
+      react: "preact/compat",
+      "react-dom": "preact/compat",
+    },
+  },
   worker: {
     format: "es",
   },

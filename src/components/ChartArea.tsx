@@ -15,7 +15,7 @@ import { Scatter } from "react-chartjs-2";
 import type { Output } from "../lib/common";
 import { useStore, useWatch } from "tinystate";
 import type { DisplayMode } from "../App";
-import { useMemo } from "react";
+import { useMemo } from "preact/hooks";
 
 // Register Chart.js components
 ChartJS.register(LinearScale, PointElement, LineElement, Title, Tooltip, Legend);

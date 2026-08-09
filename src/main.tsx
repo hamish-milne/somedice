@@ -1,10 +1,11 @@
 import "./index.css";
-import React from "react";
-import { createRoot } from "react-dom/client";
+import { render } from "preact";
+import { StrictMode } from "preact/compat";
 import App from "./App";
 
-createRoot(document.body).render(
-  <React.StrictMode>
+render(
+  <StrictMode>
     <App />
-  </React.StrictMode>,
+  </StrictMode>,
+  document.body,
 );

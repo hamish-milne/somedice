@@ -1,4 +1,4 @@
-import type { ComponentProps } from "react";
+import { forwardRef, type ComponentProps } from "preact/compat";
 
 type ButtonVariant = "primary" | "secondary" | "danger";
 
@@ -25,18 +25,23 @@ export function Button({
   );
 }
 
-export function RadioButton({
-  variant = "secondary",
-  className = "",
-  children,
-  ...props
-}: ButtonProps & ComponentProps<"input">) {
-  return (
-    <label
-      className={`appearance-none px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variantStyles[variant]} ${className}`}
-    >
-      <input type="radio" className="invisible absolute inset-0" {...props} />
-      <span className="contents absolute">{children}</span>
-    </label>
-  );
-}
+export const RadioButton = forwardRef<HTMLInputElement, ButtonProps & ComponentProps<"input">>(
+  (
+    {
+      variant = "secondary",
+      className = "",
+      children,
+      ...props
+    }: ButtonProps & ComponentProps<"input">,
+    ref,
+  ) => {
+    return (
+      <label
+        className={`appearance-none px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variantStyles[variant]} ${className}`}
+      >
+        <input type="radio" className="invisible absolute inset-0" ref={ref} {...props} />
+        <span className="contents absolute">{children}</span>
+      </label>
+    );
+  },
+);

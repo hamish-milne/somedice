@@ -7,6 +7,8 @@ settings:
 overrides:
   lightningcss: 1.33.0
   rollup: npm:rolldown@1.2.1
+  react: '-'
+  react-dom: '-'
 
 importers:
 
@@ -17,19 +19,13 @@ importers:
         version: 3.1.1(supports-color@7.2.0)
       '@tailwindcss/typography':
         specifier: ^0.5.20
-        version: 0.5.20
+        version: 0.5.20(tailwindcss@4.3.3)
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.2.0(jiti@2.7.0))
       '@types/mdx':
         specifier: ^2.0.14
         version: 2.0.14
-      '@types/react':
-        specifier: ^19.2.18
-        version: 19.2.18
-      '@types/react-dom':
-        specifier: ^19.2.4
-        version: 19.2.4(@types/react@19.2.18)
       '@vitejs/plugin-react':
         specifier: ^6.0.5
         version: 6.0.5(vite@8.2.0(jiti@2.7.0))
@@ -39,21 +35,21 @@ importers:
       chart.js:
         specifier: ^4.5.1
         version: 4.5.1
-      react:
-        specifier: ^19.2.8
-        version: 19.2.8
+      preact:
+        specifier: ^10.29.8
+        version: 10.29.8
       react-chartjs-2:
         specifier: ^5.3.1
-        version: 5.3.1(chart.js@4.5.1)(react@19.2.8)
-      react-dom:
-        specifier: ^19.2.8
-        version: 19.2.8(react@19.2.8)
+        version: 5.3.1(chart.js@4.5.1)
       remark-gfm:
         specifier: ^4.0.1
         version: 4.0.1(supports-color@7.2.0)
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
       tinystate:
         specifier: hamish-milne/tinystate#dist
-        version: https://codeload.github.com/hamish-milne/tinystate/tar.gz/33ec172c7d0422f98509d4fa09bc41660b301188(@standard-schema/spec@1.1.0)(react@19.2.8)
+        version: https://codeload.github.com/hamish-milne/tinystate/tar.gz/33ec172c7d0422f98509d4fa09bc41660b301188(@standard-schema/spec@1.1.0)(preact@10.29.8)
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -673,14 +669,6 @@ packages:
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
 
-  '@types/react-dom@19.2.4':
-    resolution: {integrity: sha512-Bsc+QHgp+P/F02XDzNCY9jnZNCUuLki36KT7VKrTXXLdHf+vHMNZnW1rVu5DNW/rCK+fya3DATySbLM4yhtKUw==}
-    peerDependencies:
-      '@types/react': ^19.2.0
-
-  '@types/react@19.2.18':
-    resolution: {integrity: sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==}
-
   '@types/unist@2.0.11':
     resolution: {integrity: sha512-CmBKiL6NNo/OqgmMn95Fk9Whlp2mtvIv+KNpQKN2F4SjvrEesubTRWGYSg+BnWZOnlCaSTU1sMpsBOzgbYhnsA==}
 
@@ -1177,9 +1165,6 @@ packages:
     engines: {node: '>=4'}
     hasBin: true
 
-  csstype@3.2.3:
-    resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
-
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
     engines: {node: '>=6.0'}
@@ -1650,6 +1635,14 @@ packages:
     resolution: {integrity: sha512-DTPx3RWSSnWyzLxQnlH0rJP+EW5ekl16ZU4/psbIhA0e53kJfdgaN5vKM+xP7yJtXVu+nfdVFmlgFDEKAe4Pyw==}
     engines: {node: ^10 || ^12 || >=14}
 
+  preact@10.29.8:
+    resolution: {integrity: sha512-ej2aVZ+vZ8WO7tvlQWRM9N63A0KzF9q4mWJfDUHgYaIofWY9hu74QdnQrjoPMmZi2/nZ5gN0bJCQF49xQqx09Q==}
+    peerDependencies:
+      preact-render-to-string: '>=5'
+    peerDependenciesMeta:
+      preact-render-to-string:
+        optional: true
+
   pretty-format@27.5.1:
     resolution: {integrity: sha512-Qb1gy5OrP5+zDf2Bvnzdl3jsTf1qXVMazbvCoKhtKqVs4/YK4ozX4gKQJJVyNe+cajNPn0KoC0MC3FUmaHWEmQ==}
     engines: {node: ^10.13.0 || ^12.13.0 || ^14.15.0 || >=15.0.0}
@@ -1661,19 +1654,9 @@ packages:
     resolution: {integrity: sha512-h5IPXKg9EXpjoBzUfyWJvllMjG2mQ4EiuHQFhms/AjUm0XSZHhyRy2xVmLXHKrtcdrPO4mnGqRtYoD0vp95A0A==}
     peerDependencies:
       chart.js: ^4.1.1
-      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
-
-  react-dom@19.2.8:
-    resolution: {integrity: sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ==}
-    peerDependencies:
-      react: ^19.2.8
 
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
-
-  react@19.2.8:
-    resolution: {integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==}
-    engines: {node: '>=0.10.0'}
 
   recma-build-jsx@1.0.0:
     resolution: {integrity: sha512-8GtdyqaBcDfva+GUKDr3nev3VpKAhup1+RvkMvUxURHpW7QyIvk9F5wz7Vzo06CEMSilw6uArgRqhpiUcWp8ew==}
@@ -1711,9 +1694,6 @@ packages:
     resolution: {integrity: sha512-4FKJhg8d3OiyQOA6Q1Q0hoFFpW9/OoX+VsHzpECsdsIZoOArrAK90gl59YK/Z+gnDel45bgJZK03ozH/9bCqEw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
-
-  scheduler@0.27.0:
-    resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}
 
   semver@7.8.5:
     resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
@@ -1790,7 +1770,7 @@ packages:
       '@preact/signals': '>=2.0.0'
       '@standard-schema/spec': '>=1.0.0'
       preact: '>=10.0.0'
-      react: '>=18.0.0'
+      react: '*'
     peerDependenciesMeta:
       '@preact/signals':
         optional: true
@@ -2345,9 +2325,10 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.3
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.3
 
-  '@tailwindcss/typography@0.5.20':
+  '@tailwindcss/typography@0.5.20(tailwindcss@4.3.3)':
     dependencies:
       postcss-selector-parser: 6.0.10
+      tailwindcss: 4.3.3
 
   '@tailwindcss/vite@4.3.3(vite@8.2.0(jiti@2.7.0))':
     dependencies:
@@ -2406,14 +2387,6 @@ snapshots:
   '@types/mdx@2.0.14': {}
 
   '@types/ms@2.1.0': {}
-
-  '@types/react-dom@19.2.4(@types/react@19.2.18)':
-    dependencies:
-      '@types/react': 19.2.18
-
-  '@types/react@19.2.18':
-    dependencies:
-      csstype: 3.2.3
 
   '@types/unist@2.0.11': {}
 
@@ -2726,8 +2699,6 @@ snapshots:
   convert-source-map@2.0.0: {}
 
   cssesc@3.0.0: {}
-
-  csstype@3.2.3: {}
 
   debug@4.4.3(supports-color@7.2.0):
     dependencies:
@@ -3496,6 +3467,8 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
+  preact@10.29.8: {}
+
   pretty-format@27.5.1:
     dependencies:
       ansi-regex: 5.0.1
@@ -3504,19 +3477,11 @@ snapshots:
 
   property-information@7.2.0: {}
 
-  react-chartjs-2@5.3.1(chart.js@4.5.1)(react@19.2.8):
+  react-chartjs-2@5.3.1(chart.js@4.5.1):
     dependencies:
       chart.js: 4.5.1
-      react: 19.2.8
-
-  react-dom@19.2.8(react@19.2.8):
-    dependencies:
-      react: 19.2.8
-      scheduler: 0.27.0
 
   react-is@17.0.2: {}
-
-  react@19.2.8: {}
 
   recma-build-jsx@1.0.0:
     dependencies:
@@ -3617,8 +3582,6 @@ snapshots:
       '@rolldown/binding-win32-arm64-msvc': 1.2.1
       '@rolldown/binding-win32-x64-msvc': 1.2.1
 
-  scheduler@0.27.0: {}
-
   semver@7.8.5: {}
 
   siginfo@2.0.0: {}
@@ -3673,10 +3636,10 @@ snapshots:
 
   tinyrainbow@3.1.1: {}
 
-  tinystate@https://codeload.github.com/hamish-milne/tinystate/tar.gz/33ec172c7d0422f98509d4fa09bc41660b301188(@standard-schema/spec@1.1.0)(react@19.2.8):
+  tinystate@https://codeload.github.com/hamish-milne/tinystate/tar.gz/33ec172c7d0422f98509d4fa09bc41660b301188(@standard-schema/spec@1.1.0)(preact@10.29.8):
     optionalDependencies:
       '@standard-schema/spec': 1.1.0
-      react: 19.2.8
+      preact: 10.29.8
 
   totalist@3.0.1: {}
 

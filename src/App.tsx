@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from "preact/hooks";
 import { Header } from "./components/Header";
 import { CodeEditor } from "./components/CodeEditor";
 import { StatusBar } from "./components/StatusBar";
