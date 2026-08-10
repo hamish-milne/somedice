@@ -38,7 +38,7 @@ jobs:
         run: pnpm run lint
 
       - name: Run tests
-        run: pnpm run test -- --coverage
+        run: pnpm run test
 
       - name: Report coverage
         if: always()

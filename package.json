@@ -4,7 +4,7 @@
     "dev": "vite",
     "lint": "tsc && vp lint",
     "build": "vite build",
-    "test": "vitest run",
+    "test": "vp test --coverage",
     "preview": "vite preview"
   },
   "dependencies": {
