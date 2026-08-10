@@ -3,7 +3,7 @@
   "scripts": {
     "dev": "vite",
     "lint": "tsc && vp lint",
-    "build": "vite build",
+    "build": "vp build",
     "test": "vp test --coverage",
     "preview": "vite preview"
   },
