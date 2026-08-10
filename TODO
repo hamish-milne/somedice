@@ -1,6 +1,6 @@
 Missing features:
   ✔ Index into number @done(26-08-09 23:46)
-  ☐ Sequence index sums all results
+  ✔ Sequence index sums all results @done(26-08-10 12:24)
   ✔ die-die operations @done(26-08-09 16:19)
   ☐ Sequence comparison
 Misc:

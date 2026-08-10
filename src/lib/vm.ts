@@ -401,11 +401,48 @@ function popNumber(stack: ProgramValueAny[]): number {
   return value;
 }
 
-function sequenceIndex(seq: Sequence, index: number): number {
+function sequenceIndexNumber(seq: Sequence, index: number): number {
   if (index < 1 || index > seq.length) {
     return 0;
   }
   return seq[index - 1];
+}
+
+function index(a: number | Sequence | Collection, index: Sequence) {
+  if (typeof a === "number") {
+    const n = Math.abs(a);
+    const sign = Math.sign(a);
+    // Index by the digit position of the number (1-based)
+    const nDigits = Math.floor(Math.log10(n)) + 1;
+    let result = 0;
+    for (const idx of index) {
+      if (idx >= 1 && idx <= nDigits) {
+        result += sign * (Math.floor(n / 10 ** (nDigits - idx)) % 10);
+      }
+    }
+    return result;
+  }
+  switch (a.kind) {
+    case KIND.SEQUENCE: {
+      let result = 0;
+      for (const idx of index) {
+        result = checkResult(result + sequenceIndexNumber(a, idx));
+      }
+      return result;
+    }
+    case KIND.COLLECTION: {
+      // Create a new die that represents the indexed values of each sequence in the collection
+      const resultMap = dieMap();
+      for (const [seq, count] of getAllSequences(a)) {
+        let value = 0;
+        for (const idx of index) {
+          value = checkResult(value + sequenceIndexNumber(seq, idx));
+        }
+        dieMapAdd(resultMap, value, count);
+      }
+      return die(dieMapFinish(resultMap));
+    }
+  }
 }
 
 function returnValue(state: ProgramState, value: ProgramValueAny): void {
@@ -561,38 +598,20 @@ export function execute(state: ProgramState, maxOps: number): boolean {
       }
       case OPCODE.AT: {
         const a = pop(stack);
-        const index = valueToNumber(pop(stack));
-        if (typeof a === "number") {
-          // Index by the digit position of the number (1-based)
-          const nDigits = Math.floor(Math.log10(Math.abs(a))) + 1;
-          if (index < 1 || index > nDigits) {
-            stack.push(0);
-          } else {
-            const digit = Math.floor(Math.abs(a) / 10 ** (nDigits - index)) % 10;
-            stack.push(digit);
-          }
-          break;
+        const b = pop(stack);
+        if (typeof b !== "number" && b.kind !== KIND.SEQUENCE) {
+          throw new Error("Index must be a number or sequence");
         }
-        switch (a.kind) {
-          case KIND.SEQUENCE: {
-            stack.push(sequenceIndex(a, index));
-            break;
-          }
-          case KIND.DIE: {
-            stack.push(index === 1 ? a : 0);
-            break;
-          }
-          case KIND.COLLECTION: {
-            // Create a new die that represents the indexed values of each sequence in the collection
-            const resultMap = dieMap();
-            for (const [seq, count] of getAllSequences(a)) {
-              const value = sequenceIndex(seq, index);
-              dieMapAdd(resultMap, value, count);
-            }
-            stack.push(die(dieMapFinish(resultMap)));
-            break;
-          }
+        let seq: number | Sequence | Collection;
+        if (typeof a === "number" || a.kind === KIND.SEQUENCE || a.kind === KIND.COLLECTION) {
+          seq = a;
+        } else if (a.kind === KIND.DIE) {
+          seq = collection(1, a);
+        } else {
+          throw new Error("Invalid ProgramValue");
         }
+        const idx = typeof b === "number" ? sequence([b]) : b;
+        stack.push(index(seq, idx));
         break;
       }
       case OPCODE.RANGE: {
@@ -1122,6 +1141,21 @@ if (import.meta.vitest) {
 
     test("AT number", () => {
       runCode([IMMEDIATE, 2, IMMEDIATE, 123, AT, OUTPUT], 2);
+    });
+
+    test("AT sequence,collection", () => {
+      runCode(
+        [IMMEDIATE, 1, IMMEDIATE, 2, SEQUENCE, 2, IMMEDIATE, 3, IMMEDIATE, 4, D, AT, OUTPUT],
+        die([
+          [2, 1],
+          [3, 3],
+          [4, 7],
+          [5, 12],
+          [6, 16],
+          [7, 15],
+          [8, 10],
+        ]),
+      );
     });
 
     test("L_STORE, L_LOAD", () => {
