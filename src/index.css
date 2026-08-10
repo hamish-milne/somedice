@@ -1,2 +1,59 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+
+.markdown-alert {
+  @apply border-l-4 p-4 mb-4 rounded-md shadow-sm;
+  @apply transition-all duration-200 hover:shadow-md;
+}
+
+.markdown-alert-title {
+  @apply font-semibold text-base flex items-center gap-2 mb-2;
+}
+
+.markdown-alert-content {
+  @apply text-sm leading-relaxed ml-7;
+}
+
+.markdown-alert-icon {
+  @apply w-5 h-5 shrink-0;
+}
+
+/* Note - Blue */
+.markdown-alert-note {
+  @apply border-blue-500 bg-blue-50/80 text-blue-900;
+}
+.markdown-alert-note .markdown-alert-icon {
+  @apply text-blue-600;
+}
+
+/* Tip - Green */
+.markdown-alert-tip {
+  @apply border-green-500 bg-green-50/80 text-green-900;
+}
+.markdown-alert-tip .markdown-alert-icon {
+  @apply text-green-600;
+}
+
+/* Important - Purple */
+.markdown-alert-important {
+  @apply border-purple-500 bg-purple-50/80 text-purple-900;
+}
+.markdown-alert-important .markdown-alert-icon {
+  @apply text-purple-600;
+}
+
+/* Warning - Amber */
+.markdown-alert-warning {
+  @apply border-amber-500 bg-amber-50/80 text-amber-900;
+}
+.markdown-alert-warning .markdown-alert-icon {
+  @apply text-amber-600;
+}
+
+/* Caution - Red */
+.markdown-alert-caution {
+  @apply border-red-500 bg-red-50/80 text-red-900;
+}
+.markdown-alert-caution .markdown-alert-icon {
+  @apply text-red-600;
+}
