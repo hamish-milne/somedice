@@ -2,7 +2,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "lint": "tsc && vp lint",
+    "build": "vite build",
+    "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -224,6 +224,7 @@ function getAllSequences([n, d]: Collection): [Sequence, number][] {
 
   const results: [Sequence, number][] = [];
   const seq: number[] = [];
+  let rCount = 0;
 
   // Distributes `remaining` dice across faces [idx..k-1]; denom/pow accumulate
   // the multinomial denominator and the count^exponent product as we go.
@@ -231,9 +232,10 @@ function getAllSequences([n, d]: Collection): [Sequence, number][] {
     if (idx === k - 1) {
       for (let j = 0; j < remaining; j++) seq.push(vals[idx]);
       const total = (fact[n] / (denom * fact[remaining])) * pow * faceCounts[idx] ** remaining;
-      if (results.length > MAX_ARRAY_LENGTH) {
+      rCount += seq.length;
+      if (rCount > MAX_ARRAY_LENGTH) {
         throw new Error(
-          `getAllSequences: n=${n} is too large - more than ${MAX_ARRAY_LENGTH} unique sequences generated`,
+          `getAllSequences: n=${n} is too large - more than ${MAX_ARRAY_LENGTH} values generated`,
         );
       }
       results.push([sequence(seq.slice().sort(NUMBER_DESCENDING)), total]);
