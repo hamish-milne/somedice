@@ -7,10 +7,10 @@
   },
   "dependencies": {
     "@mdx-js/rollup": "^3.1.1",
+    "@prefresh/rolldown": "^0.1.0",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "@types/mdx": "^2.0.14",
-    "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "^4.1.10",
     "chart.js": "^4.5.1",
     "preact": "^10.29.8",

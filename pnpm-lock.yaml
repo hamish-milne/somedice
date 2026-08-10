@@ -17,6 +17,9 @@ importers:
       '@mdx-js/rollup':
         specifier: ^3.1.1
         version: 3.1.1(supports-color@7.2.0)
+      '@prefresh/rolldown':
+        specifier: ^0.1.0
+        version: 0.1.0(rolldown@1.2.1)(vite@8.2.0(jiti@2.7.0))
       '@tailwindcss/typography':
         specifier: ^0.5.20
         version: 0.5.20(tailwindcss@4.3.3)
@@ -26,9 +29,6 @@ importers:
       '@types/mdx':
         specifier: ^2.0.14
         version: 2.0.14
-      '@vitejs/plugin-react':
-        specifier: ^6.0.5
-        version: 6.0.5(vite@8.2.0(jiti@2.7.0))
       '@vitest/coverage-v8':
         specifier: ^4.1.10
         version: 4.1.10(@vitest/browser@4.1.10)(vitest@4.1.10)
@@ -423,6 +423,15 @@ packages:
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
 
+  '@prefresh/rolldown@0.1.0':
+    resolution: {integrity: sha512-XFWqSNULnVvSQCy0x+9JQr1dw5Yks/cXSZPAaJiInECZGgfU+wY43Lf5erlCQGd1FT5otcbssu0SncXSlQ+uyA==}
+    peerDependencies:
+      rolldown: ^1.0.0-rc.12
+      vite: ^8.0.0
+    peerDependenciesMeta:
+      vite:
+        optional: true
+
   '@rolldown/binding-android-arm64@1.2.1':
     resolution: {integrity: sha512-02hOeOSryYxVrOIphmLAsqnCJWxwlzFk+pEt/N/i6OgT3lShHO7xGCU5cpgchRDHboAEbSjzgGh+O/u1GswQmA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -797,19 +806,6 @@ packages:
 
   '@ungap/structured-clone@1.3.3':
     resolution: {integrity: sha512-60YRaenCQcVjYEKOcG824+DRGGIQ3VKErcBoAEDJZz5bKIs2ZG+X/H9Nk+Q6EVkwJk5QNApxbrc5QtBSwtrXAg==}
-
-  '@vitejs/plugin-react@6.0.5':
-    resolution: {integrity: sha512-BOVzne/NL162sMdResB25mUv+vWMF5NoAjNf09TeGlE7ZpszZWSD3winycicLJw72yeVsoCn/2kOhEuCvEShMA==}
-    engines: {node: ^20.19.0 || >=22.12.0}
-    peerDependencies:
-      '@rolldown/plugin-babel': ^0.1.7 || ^0.2.0
-      babel-plugin-react-compiler: ^1.0.0
-      vite: ^8.0.0
-    peerDependenciesMeta:
-      '@rolldown/plugin-babel':
-        optional: true
-      babel-plugin-react-compiler:
-        optional: true
 
   '@vitest/browser-preview@4.1.10':
     resolution: {integrity: sha512-14MJrL59ZFkqXLjwfSk6RzTDy5Czf9UG4+8q8L6Gxjs2aPjEce/cVNYV14bXAc2BvMjUNu904+ZEZA1Xc1wtvQ==}
@@ -1397,6 +1393,9 @@ packages:
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
+  magic-string@1.1.0:
+    resolution: {integrity: sha512-kS3VHe0nEPST2saQV4Rbkchcd3UBRkVTQHo1D3h/ZTwFDhai/mfKkmtPAtD129EOI7K3HlHIsFOt0WrI2/oU9g==}
+
   magicast@0.5.4:
     resolution: {integrity: sha512-llBEhWm1SacoRwgHUoQJYtwp4PBLF4faQi5TCpIGyGs9n4y5+juI0tDgyKIfpqxckRHaHzouUEph3THklWh03w==}
 
@@ -1580,6 +1579,18 @@ packages:
     resolution: {integrity: sha512-4a+OsYv9UktOJKE+l1A4OufDgdRF9PifWj+tJnHURo/P+WOxpG4GzUFL9qCalmWauao6ogiG+QvnCovwPoyAWA==}
     engines: {node: '>=12.20.0'}
 
+  oxc-unshadowed-visitor@0.0.1:
+    resolution: {integrity: sha512-IVQnhKE/MwXJHgydUYuutUwOG1kCmAOYARqpcOvATWJQZvkyDbJ+kGMAufwFosYluPp0otDb/yilsoVvF1Ar3g==}
+    engines: {node: '>=22.12.0 || ^24.0.0'}
+    peerDependencies:
+      oxc-parser: ^0.121.0
+      rolldown: ^1.0.0-rc.12
+    peerDependenciesMeta:
+      oxc-parser:
+        optional: true
+      rolldown:
+        optional: true
+
   oxfmt@0.60.0:
     resolution: {integrity: sha512-fViX6i+gJuZWY+jI/fnR6WRbRj70GZ9RlCd30MygJrHTUNc4DxvKHWw8vBjMjffv3PgU5qWDR0AzmojQByqaZA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -1689,6 +1700,15 @@ packages:
 
   remark-stringify@11.0.0:
     resolution: {integrity: sha512-1OSmLd3awB/t8qdoEOMazZkNsfVTeY4fTsgzcQFdXNq8ToTN4ZGwrMnlda4K6smTFKD+GRV6O48i6Z4iKgPPpw==}
+
+  rolldown-string@0.3.1:
+    resolution: {integrity: sha512-dv8GOXkYqUQdI0rsXB8hmzO95pKWSuX2eg5/JSJa9czfEVIFuKNR7ZJDfat8LlmD35RAhWY+evS7/wXXqFDfSg==}
+    engines: {node: '>=20.19.0'}
+    peerDependencies:
+      rolldown: '*'
+    peerDependenciesMeta:
+      rolldown:
+        optional: true
 
   rolldown@1.2.1:
     resolution: {integrity: sha512-4FKJhg8d3OiyQOA6Q1Q0hoFFpW9/OoX+VsHzpECsdsIZoOArrAK90gl59YK/Z+gnDel45bgJZK03ozH/9bCqEw==}
@@ -2204,6 +2224,16 @@ snapshots:
 
   '@polka/url@1.0.0-next.29': {}
 
+  '@prefresh/rolldown@0.1.0(rolldown@1.2.1)(vite@8.2.0(jiti@2.7.0))':
+    dependencies:
+      oxc-unshadowed-visitor: 0.0.1(rolldown@1.2.1)
+      rolldown: 1.2.1
+      rolldown-string: 0.3.1(rolldown@1.2.1)
+    optionalDependencies:
+      vite: 8.2.0(jiti@2.7.0)
+    transitivePeerDependencies:
+      - oxc-parser
+
   '@rolldown/binding-android-arm64@1.2.1':
     optional: true
 
@@ -2453,11 +2483,6 @@ snapshots:
     optional: true
 
   '@ungap/structured-clone@1.3.3': {}
-
-  '@vitejs/plugin-react@6.0.5(vite@8.2.0(jiti@2.7.0))':
-    dependencies:
-      '@rolldown/pluginutils': 1.0.1
-      vite: 8.2.0(jiti@2.7.0)
 
   '@vitest/browser-preview@4.1.10(vite@8.2.0(jiti@2.7.0))(vitest@4.1.10)':
     dependencies:
@@ -2931,6 +2956,10 @@ snapshots:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
 
+  magic-string@1.1.0:
+    dependencies:
+      '@jridgewell/sourcemap-codec': 1.5.5
+
   magicast@0.5.4:
     dependencies:
       '@babel/parser': 7.29.8
@@ -3380,6 +3409,10 @@ snapshots:
 
   obug@2.1.4: {}
 
+  oxc-unshadowed-visitor@0.0.1(rolldown@1.2.1):
+    optionalDependencies:
+      rolldown: 1.2.1
+
   oxfmt@0.60.0(vite-plus@0.2.7(@vitest/coverage-v8@4.1.10)(jiti@2.7.0)(typescript@7.0.2)(vite@8.2.0(jiti@2.7.0))):
     dependencies:
       tinypool: 2.1.0
@@ -3560,6 +3593,12 @@ snapshots:
       '@types/mdast': 4.0.4
       mdast-util-to-markdown: 2.1.2
       unified: 11.0.5
+
+  rolldown-string@0.3.1(rolldown@1.2.1):
+    dependencies:
+      magic-string: 1.1.0
+    optionalDependencies:
+      rolldown: 1.2.1
 
   rolldown@1.2.1:
     dependencies:

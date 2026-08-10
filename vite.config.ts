@@ -1,17 +1,17 @@
 import { defineConfig } from "vite-plus";
-import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import mdx from "@mdx-js/rollup";
 import remarkGfm from "remark-gfm";
+import prefresh from "@prefresh/rolldown";
 
 export default defineConfig({
-  plugins: [
-    { enforce: "pre", ...mdx({ remarkPlugins: [remarkGfm] }) },
-    react({
-      jsxImportSource: "preact",
-    }),
-    tailwindcss(),
-  ],
+  plugins: [{ enforce: "pre", ...mdx({ remarkPlugins: [remarkGfm] }) }, prefresh(), tailwindcss()],
+  oxc: {
+    jsx: {
+      runtime: "automatic",
+      importSource: "preact",
+    },
+  },
   resolve: {
     alias: {
       react: "preact/compat",
