@@ -44,16 +44,6 @@ const PLACEHOLDER = -6666;
 const TOKEN_STRING_MAP: readonly [number, string][] = freeze(
   (
     [
-      [TOKEN.OUTPUT, "output"],
-      [TOKEN.FUNCTION, "function"],
-      [TOKEN.NAMED, "named"],
-      [TOKEN.LOOP, "loop"],
-      [TOKEN.OVER, "over"],
-      [TOKEN.RESULT, "result"],
-      [TOKEN.IF, "if"],
-      [TOKEN.ELSE, "else"],
-      [TOKEN.TYPE_N, "n"],
-      [TOKEN.TYPE_S, "s"],
       [TOKEN.ADD, "+"],
       [TOKEN.SUBTRACT, "-"],
       [TOKEN.MULTIPLY, "*"],
@@ -68,7 +58,6 @@ const TOKEN_STRING_MAP: readonly [number, string][] = freeze(
       [TOKEN.AND, "&"],
       [TOKEN.OR, "|"],
       [TOKEN.NOT, "!"],
-      [TOKEN.D, "d"],
       [TOKEN.AT, "@"],
       [TOKEN.RANGE, ".."],
       [TOKEN.LENGTH, "#"],
@@ -84,10 +73,25 @@ const TOKEN_STRING_MAP: readonly [number, string][] = freeze(
   ).sort((a, b) => b[1].length - a[1].length),
 );
 
+const TOKEN_KEYWORD_MAP = freeze<Record<string, number>>({
+  output: TOKEN.OUTPUT,
+  function: TOKEN.FUNCTION,
+  named: TOKEN.NAMED,
+  loop: TOKEN.LOOP,
+  over: TOKEN.OVER,
+  result: TOKEN.RESULT,
+  if: TOKEN.IF,
+  else: TOKEN.ELSE,
+  n: TOKEN.TYPE_N,
+  s: TOKEN.TYPE_S,
+  d: TOKEN.TYPE_D,
+});
+
 const TOKEN_NAME_MAP = freeze(
   fromEntries(
     entries<number>(TOKEN)
       .map(([key, value]) => [value, key] as const)
+      .concat(Object.entries(TOKEN_KEYWORD_MAP).map(([key, value]) => [value, key] as const))
       .concat(TOKEN_STRING_MAP.map(([token, str]) => [token, `'${str}'`] as const)),
   ),
 );
@@ -199,6 +203,9 @@ function nextToken(state: ParserState): Token {
     const match = pattern.exec(input);
     if (match) {
       state.position = pattern.lastIndex;
+      if (token === TOKEN.KEYWORD && match[0] in TOKEN_KEYWORD_MAP) {
+        return [TOKEN_KEYWORD_MAP[match[0]], match[0], location];
+      }
       return [token, match[0], location];
     }
   }
@@ -738,11 +745,11 @@ if (import.meta.vitest) {
 
     it("should parse a program with a function and output", () => {
       const program = parseProgram(`
-        function: foo X:n Y:s Z:d W {
+        function: dfoo X:n Y:s Z:d W {
           result: X + 1
         }
         BAR: 3
-        output [foo 5 4 3 2] named "Output [BAR]"
+        output [dfoo 5 4 3 2] named "Output [BAR]"
       `);
       expect(program.code).toEqual([
         OPCODE.RESERVE,

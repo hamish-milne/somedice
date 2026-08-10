@@ -495,6 +495,52 @@ function* permutationArgs(
   }
 }
 
+function binaryOperation(a: number | Die, b: number | Die, opcode: number): ProgramValueAny {
+  if (typeof a === "number" && typeof b === "number") {
+    return numberOperation(opcode, a, b);
+  } else if (typeof a === "number" && typeof b !== "number") {
+    return numberDieOperation(opcode, a, b, false);
+  } else if (typeof a !== "number" && typeof b === "number") {
+    return numberDieOperation(opcode, b, a, true);
+  } else if (typeof a !== "number" && typeof b !== "number") {
+    return dieDieOperation(opcode, a, b);
+  } else {
+    throw new Error();
+  }
+}
+
+function sequenceNumberOperation(a: Sequence, b: number, opcode: number): Sequence {
+  const result: number[] = [];
+  for (const value of a) {
+    result.push(numberOperation(opcode, value, b));
+  }
+  return sequence(result);
+}
+
+function sequenceSequenceOperation(a: Sequence, b: Sequence, opcode: number): number | Sequence {
+  if (a.length != b.length) {
+    return 0;
+  }
+  const result: number[] = [];
+  for (let i = 0; i < a.length; i++) {
+    result.push(numberOperation(opcode, a[i], b[i]));
+  }
+  return sequence(result);
+}
+
+function compareOperation(a: ProgramValueAny, b: ProgramValueAny, opcode: number): ProgramValueAny {
+  if (typeof a !== "number" && a.kind === KIND.SEQUENCE) {
+    if (typeof b === "number") {
+      return sequenceNumberOperation(a, b, opcode);
+    } else if (b.kind === KIND.SEQUENCE) {
+      return sequenceSequenceOperation(a, b, opcode);
+    }
+  } else if (typeof b !== "number" && b.kind === KIND.SEQUENCE && typeof a === "number") {
+    return sequenceNumberOperation(b, a, opcode);
+  }
+  return binaryOperation(valueToNumberOrDie(a), valueToNumberOrDie(b), opcode);
+}
+
 const MAX_STACK_SIZE = MAX_ARRAY_LENGTH * 2;
 
 export function execute(state: ProgramState, maxOps: number): boolean {
@@ -527,27 +573,22 @@ export function execute(state: ProgramState, maxOps: number): boolean {
       case OPCODE.MULTIPLY:
       case OPCODE.DIVIDE:
       case OPCODE.EXPONENT:
+      case OPCODE.AND:
+      case OPCODE.OR: {
+        const b = valueToNumberOrDie(pop(stack));
+        const a = valueToNumberOrDie(pop(stack));
+        stack.push(binaryOperation(a, b, opcode));
+        break;
+      }
       case OPCODE.EQUAL:
       case OPCODE.NOT_EQUAL:
       case OPCODE.LESS_THAN:
       case OPCODE.GREATER_THAN:
       case OPCODE.LESS_THAN_EQUAL:
-      case OPCODE.GREATER_THAN_EQUAL:
-      case OPCODE.AND:
-      case OPCODE.OR: {
-        const b = valueToNumberOrDie(pop(stack));
-        const a = valueToNumberOrDie(pop(stack));
-        if (typeof a === "number" && typeof b === "number") {
-          stack.push(numberOperation(opcode, a, b));
-        } else if (typeof a === "number" && typeof b !== "number") {
-          stack.push(numberDieOperation(opcode, a, b, false));
-        } else if (typeof a !== "number" && typeof b === "number") {
-          stack.push(numberDieOperation(opcode, b, a, true));
-        } else if (typeof a !== "number" && typeof b !== "number") {
-          stack.push(dieDieOperation(opcode, a, b));
-        } else {
-          throw new Error();
-        }
+      case OPCODE.GREATER_THAN_EQUAL: {
+        const b = pop(stack);
+        const a = pop(stack);
+        stack.push(compareOperation(a, b, opcode));
         break;
       }
       case OPCODE.UNARY_MINUS:
@@ -700,10 +741,11 @@ export function execute(state: ProgramState, maxOps: number): boolean {
               }
               break;
             case KIND.DIE:
-              stack[fp + i] = valueToDie(arg);
+              if (typeof arg === "number" || arg.kind !== KIND.COLLECTION) {
+                stack[fp + i] = valueToDie(arg);
+              }
               break;
             case KIND.ANY:
-              stack[fp + i] = arg;
               break;
           }
         }
@@ -987,6 +1029,52 @@ if (import.meta.vitest) {
     test("EQUAL", () => {
       runCode([IMMEDIATE, 5, IMMEDIATE, 5, EQUAL, OUTPUT], 1);
       runCode([IMMEDIATE, 5, IMMEDIATE, 3, EQUAL, OUTPUT], 0);
+    });
+
+    test("EQUAL number,sequence", () => {
+      runCode([IMMEDIATE, 5, IMMEDIATE, 5, SEQUENCE, 1, EQUAL, OUTPUT], 1);
+      runCode([IMMEDIATE, 5, IMMEDIATE, 3, SEQUENCE, 1, EQUAL, OUTPUT], 0);
+    });
+
+    test("EQUAL sequence,sequence", () => {
+      runCode(
+        [
+          IMMEDIATE,
+          1,
+          IMMEDIATE,
+          2,
+          SEQUENCE,
+          2,
+          IMMEDIATE,
+          1,
+          IMMEDIATE,
+          2,
+          SEQUENCE,
+          2,
+          EQUAL,
+          OUTPUT,
+        ],
+        2,
+      );
+      runCode(
+        [
+          IMMEDIATE,
+          1,
+          IMMEDIATE,
+          2,
+          SEQUENCE,
+          2,
+          IMMEDIATE,
+          2,
+          IMMEDIATE,
+          1,
+          SEQUENCE,
+          2,
+          EQUAL,
+          OUTPUT,
+        ],
+        0,
+      );
     });
 
     test("NOT_EQUAL", () => {
