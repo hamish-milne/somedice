@@ -54,10 +54,11 @@ function outputsToChartData(outputs: Output[], displayMode: DisplayMode): ChartD
     if (points.length > 0) {
       for (let x = points[0].x, x2 = x, i = 1; i < points.length; i++) {
         x2 = points[i].x;
-        for (x++; x < x2; x++) {
-          points.splice(i, 0, { x, y: 0 });
-          i++;
+        if (x + 1 < x2) {
+          points.splice(i, 0, { x: x + 1, y: 0 }, { x: x2 - 1, y: 0 });
+          i += 2; // Skip the newly added points
         }
+        x = x2;
       }
     }
 

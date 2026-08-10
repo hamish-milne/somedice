@@ -244,16 +244,16 @@ const operatorPrecedence: Record<Operator, number> = freeze({
   [OPCODE.NOT]: 0,
   [OPCODE.LENGTH]: 0,
 
-  [OPCODE.EXPONENT]: 1,
+  [OPCODE.RANGE]: 1,
+  [OPCODE.AT]: 1,
 
-  [OPCODE.MULTIPLY]: 2,
-  [OPCODE.DIVIDE]: 2,
+  [OPCODE.EXPONENT]: 2,
 
-  [OPCODE.ADD]: 3,
-  [OPCODE.SUBTRACT]: 3,
+  [OPCODE.MULTIPLY]: 3,
+  [OPCODE.DIVIDE]: 3,
 
-  [OPCODE.RANGE]: 4,
-  [OPCODE.AT]: 4,
+  [OPCODE.ADD]: 4,
+  [OPCODE.SUBTRACT]: 4,
 
   [OPCODE.EQUAL]: 5,
   [OPCODE.NOT_EQUAL]: 5,

@@ -64,7 +64,7 @@ function numberOperation(op: number, a: number, b: number): number {
     case OPCODE.MULTIPLY:
       return checkResult(a * b);
     case OPCODE.DIVIDE:
-      return checkResult(Math.floor(a / b));
+      return checkResult(Math.trunc(a / b));
     case OPCODE.EXPONENT:
       if (b < 0) {
         throw new Error("Negative exponent not supported");
@@ -410,14 +410,12 @@ function sequenceIndexNumber(seq: Sequence, index: number): number {
 
 function index(a: number | Sequence | Collection, index: Sequence) {
   if (typeof a === "number") {
-    const n = Math.abs(a);
-    const sign = Math.sign(a);
     // Index by the digit position of the number (1-based)
-    const nDigits = Math.floor(Math.log10(n)) + 1;
+    const nDigits = Math.floor(Math.log10(Math.abs(a))) + 1;
     let result = 0;
     for (const idx of index) {
       if (idx >= 1 && idx <= nDigits) {
-        result += sign * (Math.floor(n / 10 ** (nDigits - idx)) % 10);
+        result += Math.trunc(a / 10 ** (nDigits - idx)) % 10;
       }
     }
     return result;
@@ -509,23 +507,21 @@ function binaryOperation(a: number | Die, b: number | Die, opcode: number): Prog
   }
 }
 
-function sequenceNumberOperation(a: Sequence, b: number, opcode: number): Sequence {
-  const result: number[] = [];
+function sequenceNumberOperation(a: Sequence, b: number, opcode: number): number {
+  let result = 0;
   for (const value of a) {
-    result.push(numberOperation(opcode, value, b));
+    result = checkResult(result + numberOperation(opcode, value, b));
   }
-  return sequence(result);
+  return result;
 }
 
-function sequenceSequenceOperation(a: Sequence, b: Sequence, opcode: number): number | Sequence {
-  if (a.length != b.length) {
-    return 0;
+function sequenceSequenceOperation(a: Sequence, b: Sequence, opcode: number): number {
+  const n = Math.min(a.length, b.length);
+  let result = 0;
+  for (let i = 0; i < n; i++) {
+    result = checkResult(result + numberOperation(opcode, a[i], b[i]));
   }
-  const result: number[] = [];
-  for (let i = 0; i < a.length; i++) {
-    result.push(numberOperation(opcode, a[i], b[i]));
-  }
-  return sequence(result);
+  return result;
 }
 
 function compareOperation(a: ProgramValueAny, b: ProgramValueAny, opcode: number): ProgramValueAny {
@@ -668,7 +664,7 @@ export function execute(state: ProgramState, maxOps: number): boolean {
         const count = readPc();
         const seq: number[] = [];
         for (let i = 0; i < count; i++) {
-          const entry = valueToNewSequence(pop(stack));
+          const entry = valueToNewSequence(stack[stack.length - count + i]);
           // Efficiently append the entry to the sequence (avoiding stack overflow for large sequences)
           const j = seq.length;
           seq.length += entry.length;
@@ -676,6 +672,7 @@ export function execute(state: ProgramState, maxOps: number): boolean {
             seq[j + k] = entry[k];
           }
         }
+        stack.length -= count; // Remove the original entries from the stack
         stack.push(sequence(seq));
         break;
       }
