@@ -135,10 +135,15 @@ export function ChartArea() {
 
   const outputs = useWatch(store, "outputs");
   const displayMode = useWatch(store, "displayMode");
+  const displayState = useWatch(store, "displayState");
+  const isVisible = displayState === "output" && displayMode !== "documentation";
   const data = useMemo(() => outputsToChartData(outputs, displayMode), [outputs, displayMode]);
 
   return (
-    <div className="h-full p-2 sm:p-6 min-h-96 overflow-x-hidden">
+    <div
+      className="h-full p-2 sm:p-6 min-h-96 overflow-x-hidden data-hidden:hidden"
+      data-hidden={isVisible ? undefined : true}
+    >
       <Scatter data={data} options={options} />
     </div>
   );

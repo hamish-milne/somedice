@@ -45,3 +45,39 @@ export const RadioButton = forwardRef<HTMLInputElement, ButtonProps & ComponentP
     );
   },
 );
+
+export const RadioButtonCompact = forwardRef<
+  HTMLInputElement,
+  ButtonProps & ComponentProps<"input">
+>(
+  (
+    {
+      variant = "secondary",
+      className = "",
+      children,
+      ...props
+    }: ButtonProps & ComponentProps<"input">,
+    ref,
+  ) => {
+    return (
+      <label
+        className={`appearance-none px-3 py-1.5 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-nowrap border-r border-gray-400/30 last:border-r-0 first:rounded-l-md last:rounded-r-md ${variantStyles[variant]} ${className}`}
+      >
+        <input type="radio" className="invisible absolute inset-0" ref={ref} {...props} />
+        <span className="contents absolute">{children}</span>
+      </label>
+    );
+  },
+);
+
+interface ButtonGroupProps extends ComponentProps<"div"> {
+  compact?: boolean;
+}
+
+export function ButtonGroup({ className = "", children, ...props }: ButtonGroupProps) {
+  return (
+    <div className={`inline-flex shadow-sm ${className}`} role="group" {...props}>
+      {children}
+    </div>
+  );
+}

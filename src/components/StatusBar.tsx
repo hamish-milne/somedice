@@ -38,7 +38,7 @@ export function StatusBar() {
         {/* Control Buttons */}
         {!isRunning ? (
           <Button className="w-24" variant="primary" onClick={onStart}>
-            Start
+            Run
           </Button>
         ) : (
           <Button className="w-24" variant="danger" onClick={onCancel}>

@@ -14,14 +14,9 @@ export function ErrorView() {
   const store = useStore();
   const inputCode = useWatch(store, "inputCode");
   const error = useWatch(store, "error");
-
-  if (!error) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <p className="text-gray-500 text-sm">No error to display</p>
-      </div>
-    );
-  }
+  const displayMode = useWatch(store, "displayMode");
+  const displayState = useWatch(store, "displayState");
+  const isVisible = displayState === "error" && displayMode !== "documentation";
 
   const { errorType, message, debugInfo } = error;
   const lines = inputCode.split("\n");
@@ -38,7 +33,10 @@ export function ErrorView() {
   const snippetLines = lines.slice(snippetStart, snippetEnd);
 
   return (
-    <div className="h-full overflow-auto">
+    <div
+      className="h-full overflow-auto data-hidden:hidden"
+      data-hidden={isVisible ? undefined : true}
+    >
       <div className="max-w-5xl mx-auto p-4">
         {/* Error Header - Compact */}
         <div className="mb-4 pb-3 border-b border-gray-200">

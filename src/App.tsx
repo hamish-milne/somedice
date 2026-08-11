@@ -15,7 +15,6 @@ import {
   peek,
   StoreProvider,
   useStore,
-  useWatch,
   type AppStore,
 } from "tinystate";
 import { syncStorage } from "tinystate/utils";
@@ -140,10 +139,6 @@ function RunnerManager() {
 }
 
 function Main() {
-  const store = useStore();
-  const displayMode = useWatch(store, "displayMode");
-  const displayState = useWatch(store, "displayState");
-
   return (
     <div className="h-full min-w-86 flex flex-col bg-gray-100">
       <RunnerManager />
@@ -161,13 +156,9 @@ function Main() {
         <div className="flex flex-col h-1/2 lg:h-full lg:min-h-0">
           <DisplayModeSelector />
           <div className="flex-1 overflow-auto min-h-0 bg-white">
-            {displayMode === "documentation" ? (
-              <DocumentationView />
-            ) : displayState === "output" ? (
-              <ChartArea />
-            ) : (
-              <ErrorView />
-            )}
+            <DocumentationView />
+            <ErrorView />
+            <ChartArea />
           </div>
         </div>
       </div>
