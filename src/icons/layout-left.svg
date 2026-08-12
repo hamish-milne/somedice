@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <polygon points="4,4 20,4 4,20" fill="currentColor" opacity="0.2"/>
+  <path d="M 4 4 L 20 4 L 20 20 L 4 20 Z" stroke-dasharray="4,4" stroke-dashoffset="2"/>
+  <path d="M 4 4 L 20 4"/>
+  <path d="M 4 4 L 4 20"/>
+  <line x1="4" y1="20" x2="20" y2="4"/>
+</svg>

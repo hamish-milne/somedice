@@ -15,6 +15,7 @@ import {
   peek,
   StoreProvider,
   useStore,
+  useWatch,
   type AppStore,
 } from "tinystate";
 import { syncStorage } from "tinystate/utils";
@@ -24,6 +25,7 @@ export type DisplayMode = "exactly" | "atLeast" | "atMost" | "documentation";
 
 declare global {
   interface AppState {
+    layout: "left" | "right" | "split";
     displayMode: DisplayMode;
     inputCode: string;
     outputs: Output[];
@@ -41,7 +43,8 @@ declare global {
 }
 
 const initialState: AppState = {
-  displayMode: "exactly",
+  layout: "split",
+  displayMode: "documentation",
   inputCode: "",
   outputs: [],
   runState: "idle",
@@ -139,6 +142,8 @@ function RunnerManager() {
 }
 
 function Main() {
+  const store = useStore();
+  const layout = useWatch(store, "layout");
   return (
     <div className="h-full min-w-86 flex flex-col bg-gray-100">
       <RunnerManager />
@@ -146,14 +151,20 @@ function Main() {
       <Header />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col lg:grid lg:grid-cols-2 gap-0 overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row gap-0 overflow-hidden">
         {/* Left Panel: Code Editor */}
-        <div className="flex flex-col h-1/2 lg:h-full border-r border-gray-300">
+        <div
+          className="flex-1 min-h-0 min-w-0 flex flex-col border-r border-gray-300 data-hidden:hidden"
+          data-hidden={layout === "right" ? true : undefined}
+        >
           <CodeEditor />
         </div>
 
         {/* Right Panel: Display Mode Selector and Chart */}
-        <div className="flex flex-col h-1/2 lg:h-full lg:min-h-0">
+        <div
+          className="flex-1 min-h-0 min-w-0 flex flex-col data-hidden:hidden"
+          data-hidden={layout === "left" ? true : undefined}
+        >
           <DisplayModeSelector />
           <div className="flex-1 overflow-auto min-h-0 bg-white">
             <DocumentationView />
@@ -164,7 +175,12 @@ function Main() {
       </div>
 
       {/* Status Bar */}
-      <StatusBar />
+      <div
+        className="contents not-lg:data-hidden:hidden"
+        data-hidden={layout === "right" ? true : undefined}
+      >
+        <StatusBar />
+      </div>
     </div>
   );
 }

@@ -37,7 +37,7 @@ export const RadioButton = forwardRef<HTMLInputElement, ButtonProps & ComponentP
   ) => {
     return (
       <label
-        className={`appearance-none px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-nowrap ${variantStyles[variant]} ${className}`}
+        className={`relative appearance-none px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-nowrap ${variantStyles[variant]} ${className}`}
       >
         <input type="radio" className="invisible absolute inset-0" ref={ref} {...props} />
         <span className="contents absolute">{children}</span>
@@ -61,7 +61,7 @@ export const RadioButtonCompact = forwardRef<
   ) => {
     return (
       <label
-        className={`appearance-none px-3 py-1.5 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-nowrap border-r border-gray-400/30 last:border-r-0 first:rounded-l-md last:rounded-r-md ${variantStyles[variant]} ${className}`}
+        className={`relative appearance-none px-3 py-1.5 sm:px-4 sm:py-2 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-nowrap border-r border-gray-400/30 last:border-r-0 first:rounded-l-md last:rounded-r-md ${variantStyles[variant]} ${className}`}
       >
         <input type="radio" className="invisible absolute inset-0" ref={ref} {...props} />
         <span className="contents absolute">{children}</span>
