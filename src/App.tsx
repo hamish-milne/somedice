@@ -144,6 +144,11 @@ function RunnerManager() {
 function Main() {
   const store = useStore();
   const layout = useWatch(store, "layout");
+
+  useEffect(() => {
+    patch(store, { runState: "idle" });
+  }, []);
+
   return (
     <div className="h-full min-w-86 flex flex-col bg-gray-100">
       <RunnerManager />

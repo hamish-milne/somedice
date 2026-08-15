@@ -1,11 +1,5 @@
 // oxlint-disable typescript/no-duplicate-enum-values unicorn/no-new-array
 
-function arrayFromPtr<T>(ptr: usize, length: i32): StaticArray<T> {
-  const arr = new StaticArray<T>(length);
-  memory.copy(changetype<usize>(arr), ptr, length * sizeof<T>());
-  return arr;
-}
-
 abstract class AnyValue {
   abstract toString(): string;
   abstract get typeName(): string;
@@ -171,7 +165,7 @@ const EMPTY_SEQUENCE = new SequenceValue(new StaticArray<i64>(0));
 @final
 class SequenceBuilder extends Array<i64> {
   build(): SequenceValue {
-    return new SequenceValue(arrayFromPtr<i64>(this.dataStart, this.length));
+    return new SequenceValue(StaticArray.fromArray<i64>(this));
   }
 }
 
@@ -251,7 +245,7 @@ class DieBuilder extends Array<DieEntry> {
   }
 
   build(): DieValue {
-    return new DieValue(arrayFromPtr<DieEntry>(this.dataStart, this.length));
+    return new DieValue(StaticArray.fromArray<DieEntry>(this));
   }
 }
 
@@ -340,7 +334,7 @@ class SequenceListBuilder extends Array<i64> {
     if (sequence.length !== this.span) {
       throw new Error("Sequence length does not match span");
     }
-    const sorted = arrayFromPtr<i64>(sequence.dataStart, sequence.length);
+    const sorted = StaticArray.fromArray<i64>(sequence);
     sorted.sort(I64_DESCENDING);
     this.push(frequency);
     for (let i = 0; i < sorted.length; i++) {
@@ -364,7 +358,7 @@ class SequenceListBuilder extends Array<i64> {
   }
 
   build(): SequenceList {
-    return new SequenceList(this.span, arrayFromPtr<i64>(this.dataStart, this.length));
+    return new SequenceList(this.span, StaticArray.fromArray<i64>(this));
   }
 }
 
@@ -395,9 +389,12 @@ class SequenceList extends AnyValue {
     if (index < 0 || index >= this.sequenceCount) {
       throw new RangeError("Index out of bounds");
     }
-    const basePtr = changetype<usize>(this.data) + index * (this.span + 1) * sizeof<i64>();
-    const sequencePtr = basePtr + sizeof<i64>();
-    return new SequenceValue(arrayFromPtr<i64>(sequencePtr, this.span));
+    const sequence = new StaticArray<i64>(this.span);
+    const basePtr = index * (this.span + 1) + 1;
+    for (let i = 0; i < this.span; i++) {
+      sequence[i] = this.data[basePtr + i];
+    }
+    return new SequenceValue(sequence);
   }
 
   frequencyAt(index: i32): i64 {
@@ -460,7 +457,7 @@ class ProgramState {
   currentFrequency: i64 = 0;
   results: ResultsBuilder = new ResultsBuilder();
   pcMax: i32 = 0;
-  opCount: i32 = 0;
+  opCount: i64 = 0;
 
   constructor(code: StaticArray<i32>) {
     this.code = code;
@@ -635,10 +632,14 @@ function collectionToDie(collection: CollectionValue): DieValue {
   }
 
   const output = new StaticArray<DieEntry>(outputLength);
-  for (let i = 0, j = 0; i < result.coeffs.length; i++) {
+  let j = 0;
+  for (let i = 0; i < result.coeffs.length; i++) {
     if (result.coeffs[i] > 0) {
       output[j++] = new DieEntry(result.offset + i, result.coeffs[i]);
     }
+  }
+  if (j !== outputLength) {
+    throw new Error("collectionToDie: output length mismatch");
   }
   return new DieValue(output);
 }
@@ -1074,9 +1075,10 @@ function functionLoop(state: ProgramState): void {
 
 const MAX_STACK_SIZE = 500_000_000;
 
-function execute(state: ProgramState, maxOps: i32): boolean {
+function execute(state: ProgramState, ops: i32): i64 {
   const code = state.code;
   const stack = state.stack;
+  const maxOps = state.opCount + ops;
 
   for (; state.opCount < maxOps; state.opCount++) {
     if (state.pc > state.pcMax) {
@@ -1084,7 +1086,7 @@ function execute(state: ProgramState, maxOps: i32): boolean {
     }
 
     if (state.pc >= code.length) {
-      return true; // Program completed successfully
+      return -1; // Program completed successfully
     }
 
     if (stack.length > MAX_STACK_SIZE) {
@@ -1287,7 +1289,9 @@ function execute(state: ProgramState, maxOps: i32): boolean {
       }
       case OPCODE.RESERVE: {
         const reserveCount = code[state.pc++];
-        stack.length += reserveCount;
+        for (let i = 0; i < reserveCount; i++) {
+          stack.push(EMPTY_SEQUENCE);
+        }
         break;
       }
       case OPCODE.OUTPUT: {
@@ -1299,7 +1303,7 @@ function execute(state: ProgramState, maxOps: i32): boolean {
         throw new Error(`Unknown opcode: ${opcode}`);
     }
   }
-  return false; // Max operations reached, not completed
+  return state.opCount; // Max operations reached, not completed
 }
 
 let gState: ProgramState | null = null;
@@ -1308,7 +1312,7 @@ export function newProgram(code: StaticArray<i32>): void {
   gState = new ProgramState(code);
 }
 
-export function runProgram(maxOps: i32): boolean {
+export function runProgram(maxOps: i32): i64 {
   if (gState === null) {
     throw new Error("No program loaded");
   }
@@ -1317,8 +1321,8 @@ export function runProgram(maxOps: i32): boolean {
 
 @unmanaged
 class OutputEntry {
-  value: f64 = 0;
-  frequency: f64 = 0;
+  v: f64 = 0;
+  f: f64 = 0;
 }
 
 export function getProgramOutputs(): Array<Array<OutputEntry>> {
@@ -1333,8 +1337,8 @@ export function getProgramOutputs(): Array<Array<OutputEntry>> {
     for (let j = 0; j < die.data.length; j++) {
       const entry = die.data[j];
       const outputEntry = new OutputEntry();
-      outputEntry.value = entry.value as f64;
-      outputEntry.frequency = entry.frequency as f64;
+      outputEntry.v = entry.value as f64;
+      outputEntry.f = entry.frequency as f64;
       entries[j] = outputEntry;
     }
     result[i] = entries;

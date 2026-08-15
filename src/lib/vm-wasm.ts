@@ -18,7 +18,7 @@ if (import.meta.vitest) {
     }
     const outputs = getProgramOutputs();
     const converted = outputs.map((die) =>
-      die.map((entry) => [entry.value, entry.frequency] as [number, number]),
+      die.map((entry) => [entry.v, entry.f] as [number, number]),
     );
     const expected = typeof expectedOutput === "number" ? [[expectedOutput, 1]] : expectedOutput;
     expect(converted[0]).toEqual(expected);

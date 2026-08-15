@@ -120,7 +120,7 @@ export function valueToString(value: ProgramValueAny): string {
   }
 }
 
-export type Output = [name: string, value: Die];
+export type Output = [name: string, value: readonly DieItem[]];
 
 export type DebugInfo = {
   location: Location;
