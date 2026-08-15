@@ -61,7 +61,9 @@ export const KIND = freeze({
   SEQUENCE: 2,
   DIE: 3,
   COLLECTION: 4,
-  ARGLIST: 5,
+  NUMBER_LIST: 5,
+  SEQUENCE_LIST: 6,
+  FRAME: 7,
 });
 export type KIND = ValueOf<typeof KIND>;
 
@@ -79,53 +81,14 @@ export type Program = {
   debugLocations: Location[];
   debugFrames: readonly DebugFrame[];
 };
-
-export type Sequence = readonly number[] & { readonly kind: typeof KIND.SEQUENCE };
 export type DieItem = readonly [value: number, count: number];
-export type Die = readonly DieItem[] & { readonly kind: typeof KIND.DIE };
-export type Collection = readonly [count: number, die: Die] & {
-  readonly kind: typeof KIND.COLLECTION;
-};
-export type ArgListItem = readonly [arg: ProgramValue, count: number];
-export type ArgList = readonly ArgListItem[] & {
-  readonly kind: typeof KIND.ARGLIST;
-};
-export type ProgramValue = number | Sequence | Die | Collection;
-export type ProgramValueAny = ProgramValue | ArgList;
-
-const MAX_STRING_ITEMS = 10;
-
-export function valueToString(value: ProgramValueAny): string {
-  if (typeof value === "number") {
-    return value.toString();
-  }
-  const ellipsis = value.length > MAX_STRING_ITEMS ? ",..." : "";
-  switch (value.kind) {
-    case KIND.SEQUENCE:
-      return `[${value.slice(0, MAX_STRING_ITEMS).join(",")}${ellipsis}]`;
-    case KIND.DIE:
-      return `{${value
-        .slice(0, MAX_STRING_ITEMS)
-        .map(([v, c]) => `${v}:${c}`)
-        .join(",")}${ellipsis}}`;
-    case KIND.COLLECTION:
-      return `${value[0]}d${valueToString(value[1])}`;
-    case KIND.ARGLIST:
-      return `<${value
-        .slice(0, MAX_STRING_ITEMS)
-        .map(([seq, count]) => `${valueToString(seq)}:${count}`)
-        .join(",")}${ellipsis}>`;
-    default:
-      return "<unknown>";
-  }
-}
 
 export type Output = [name: string, value: readonly DieItem[]];
 
 export type DebugInfo = {
   location: Location;
   functionName: string;
-  variables: readonly (readonly [name: string, value: ProgramValueAny])[];
+  variables: readonly (readonly [name: string, value: string])[];
 };
 
 export abstract class BaseError extends Error {

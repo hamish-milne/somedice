@@ -1,18 +1,4 @@
-import {
-  KIND,
-  OPCODE,
-  valueToString,
-  type Collection,
-  type ArgListItem,
-  type DebugInfo,
-  type Die,
-  type DieItem,
-  type Output,
-  type Program,
-  type Sequence,
-  type ArgList,
-  type ProgramValueAny,
-} from "./common";
+import { KIND, OPCODE, type DebugInfo, type DieItem, type Output, type Program } from "./common";
 
 const { freeze, assign } = Object;
 const { from: arrayFrom } = Array;
@@ -20,7 +6,60 @@ const { from: arrayFrom } = Array;
 const KIND_DIE = freeze({ kind: KIND.DIE });
 const KIND_SEQUENCE = freeze({ kind: KIND.SEQUENCE });
 const KIND_COLLECTION = freeze({ kind: KIND.COLLECTION });
-const KIND_ARG_LIST = freeze({ kind: KIND.ARGLIST });
+const KIND_NUMBER_LIST = freeze({ kind: KIND.NUMBER_LIST });
+const KIND_SEQUENCE_LIST = freeze({ kind: KIND.SEQUENCE_LIST });
+
+export type Sequence = readonly number[] & { readonly kind: typeof KIND.SEQUENCE };
+export type Die = readonly DieItem[] & { readonly kind: typeof KIND.DIE };
+export type Collection = readonly [count: number, die: Die] & {
+  readonly kind: typeof KIND.COLLECTION;
+};
+export type NumberList = readonly DieItem[] & {
+  readonly kind: typeof KIND.NUMBER_LIST;
+};
+export type SequenceListItem = readonly [sequence: Sequence, count: number];
+export type SequenceList = readonly SequenceListItem[] & {
+  readonly kind: typeof KIND.SEQUENCE_LIST;
+};
+export type Frame = {
+  readonly pc: number;
+  readonly fp: number;
+  readonly loopIndex: number;
+  readonly currentFrequency: number;
+  readonly results: ResultItem[];
+  readonly kind: typeof KIND.FRAME;
+};
+export type ProgramValue = number | Sequence | Die | Collection | Frame | NumberList | SequenceList;
+
+const MAX_STRING_ITEMS = 10;
+
+export function valueToString(value: ProgramValue): string {
+  if (typeof value === "number") {
+    return value.toString();
+  }
+  if (value.kind === KIND.FRAME) {
+    return `<frame pc=${value.pc} fp=${value.fp} loopIndex=${value.loopIndex}>`;
+  }
+  const ellipsis = value.length > MAX_STRING_ITEMS ? ",..." : "";
+  switch (value.kind) {
+    case KIND.SEQUENCE:
+      return `[${value.slice(0, MAX_STRING_ITEMS).join(",")}${ellipsis}]`;
+    case KIND.DIE:
+      return `{${value
+        .slice(0, MAX_STRING_ITEMS)
+        .map(([v, c]) => `${v}:${c}`)
+        .join(",")}${ellipsis}}`;
+    case KIND.COLLECTION:
+      return `${value[0]}d${valueToString(value[1])}`;
+    case KIND.NUMBER_LIST:
+      return `<${value
+        .slice(0, MAX_STRING_ITEMS)
+        .map(([v, c]) => `${valueToString(v)}:${c}`)
+        .join(",")}${ellipsis}>`;
+    default:
+      return "<unknown>";
+  }
+}
 
 function dieItem(value: number, count: number): DieItem {
   return freeze([value, count]);
@@ -40,8 +79,12 @@ function collection(count: number, die: Die): Collection {
   return freeze(assign([count, die] as const, KIND_COLLECTION));
 }
 
-function argList(items: ArgListItem[]): ArgList {
-  return freeze(assign(items, KIND_ARG_LIST));
+function numberList(items: DieItem[]): NumberList {
+  return freeze(assign(items, KIND_NUMBER_LIST));
+}
+
+function sequenceList(items: SequenceListItem[]): SequenceList {
+  return freeze(assign(items, KIND_SEQUENCE_LIST));
 }
 
 function totalWeight(d: Die): number {
@@ -118,7 +161,7 @@ function dNumber(d: number): Die {
   return die(arrayFrom({ length: d }, (_, i) => dieItem(i + 1, 1)));
 }
 
-function valueToDie(x: ProgramValueAny): Die {
+function valueToDie(x: ProgramValue): Die {
   if (typeof x === "number") {
     return die([[x, 1]]);
   }
@@ -133,7 +176,7 @@ function valueToDie(x: ProgramValueAny): Die {
   throw new Error("Invalid ProgramValue");
 }
 
-function valueToNewDie(x: ProgramValueAny): Die {
+function valueToNewDie(x: ProgramValue): Die {
   if (typeof x === "number") {
     return dNumber(x);
   }
@@ -153,7 +196,7 @@ function valueToNewDie(x: ProgramValueAny): Die {
   throw new Error("Invalid ProgramValue");
 }
 
-function valueToNewSequence(x: ProgramValueAny): Sequence {
+function valueToNewSequence(x: ProgramValue): Sequence {
   if (typeof x === "number") {
     return sequence([x]);
   }
@@ -171,7 +214,7 @@ function valueToNewSequence(x: ProgramValueAny): Sequence {
   }
 }
 
-function valueToNumber(x: ProgramValueAny): number {
+function valueToNumber(x: ProgramValue): number {
   if (typeof x === "number") {
     return x;
   }
@@ -182,7 +225,7 @@ function valueToNumber(x: ProgramValueAny): number {
   throw new Error("Expected a number or sequence, but got a die or collection");
 }
 
-function valueToNumberOrDie(x: ProgramValueAny): number | Die {
+function valueToNumberOrDie(x: ProgramValue): number | Die {
   return typeof x === "number" ? x : x.kind === KIND.SEQUENCE ? sum(x) : valueToDie(x);
 }
 
@@ -206,7 +249,7 @@ const NUMBER_DESCENDING = (a: number, b: number) => b - a;
 const MAX_SAFE_NUMBER = 1e300;
 const MAX_ARRAY_LENGTH = 5e8;
 
-function getAllSequences([n, d]: Collection): [Sequence, number][] {
+function getAllSequences([n, d]: Collection): SequenceListItem[] {
   const vals = d.map((e) => e[0]);
   const faceCounts = d.map((e) => e[1]);
   const k = vals.length;
@@ -222,7 +265,7 @@ function getAllSequences([n, d]: Collection): [Sequence, number][] {
     }
   }
 
-  const results: [Sequence, number][] = [];
+  const results: SequenceListItem[] = [];
   const seq: number[] = [];
   let rCount = 0;
 
@@ -342,9 +385,9 @@ function dDieDie(n: Die, d: Die): Die {
   return die(dieMapFinish(result));
 }
 
-function combineArgList(argList: readonly ArgListItem[]): Die {
+function buildResult(results: readonly ResultItem[]): Die {
   const result = dieMap();
-  const dice = argList.map(([arg, count]) => [valueToDie(arg), count] as const);
+  const dice = results.map(([arg, count]) => [valueToDie(arg), count] as const);
   const allWeights = dice.map(([die]) => totalWeight(die));
   const totalResultWeight = product(allWeights) < Number.MAX_SAFE_INTEGER ? lcm(allWeights) : 1;
   for (let i = 0; i < dice.length; i++) {
@@ -387,7 +430,7 @@ function dieUnaryOperation(op: number, d: Die): Die {
   return die(dieMapFinish(resultMap));
 }
 
-function pop(stack: ProgramValueAny[]): ProgramValueAny {
+function pop(stack: ProgramValue[]): ProgramValue {
   const value = stack.pop();
   if (value == null) {
     throw new Error("Stack underflow");
@@ -395,7 +438,7 @@ function pop(stack: ProgramValueAny[]): ProgramValueAny {
   return value;
 }
 
-function popNumber(stack: ProgramValueAny[]): number {
+function popNumber(stack: ProgramValue[]): number {
   const value = pop(stack);
   if (typeof value !== "number") {
     throw new Error("Expected a number on the stack");
@@ -445,22 +488,16 @@ function index(a: number | Sequence | Collection, index: Sequence) {
   }
 }
 
-function returnValue(state: ProgramState, value: ProgramValueAny): void {
-  const { stack } = state;
-  stack.length = state.fp; // Clear the stack to the frame pointer
-  // Restore the previous state of the program from the stack
-  state.loopIndex = popNumber(stack);
-  state.fp = popNumber(stack);
-  state.pc = popNumber(stack);
-  stack.push(value); // Push the return value onto the stack
-}
+type ResultItem = readonly [value: Die, count: number];
 
 export type ProgramState = {
   program: Program;
-  stack: ProgramValueAny[];
+  stack: ProgramValue[];
   pc: number;
   fp: number;
   loopIndex: number;
+  currentFrequency: number;
+  results: ResultItem[];
   pcMax: number;
   opCount: number;
   outputs: Output[];
@@ -475,27 +512,13 @@ export function newState(program: Program): ProgramState {
     loopIndex: 0,
     pcMax: 0,
     opCount: 0,
+    currentFrequency: 0,
+    results: [],
     outputs: [],
   };
 }
 
-function* permutationArgs(
-  args: readonly ProgramValueAny[],
-  loopIndex: number,
-): Generator<ArgListItem> {
-  let remainingIndex = loopIndex;
-  for (const arg of args) {
-    if (typeof arg === "object" && arg.kind === KIND.ARGLIST) {
-      const argListIndex = remainingIndex % arg.length;
-      yield arg[argListIndex];
-      remainingIndex = Math.floor(remainingIndex / arg.length);
-    } else {
-      yield [arg, 1];
-    }
-  }
-}
-
-function binaryOperation(a: number | Die, b: number | Die, opcode: number): ProgramValueAny {
+function binaryOperation(a: number | Die, b: number | Die, opcode: number): ProgramValue {
   if (typeof a === "number" && typeof b === "number") {
     return numberOperation(opcode, a, b);
   } else if (typeof a === "number" && typeof b !== "number") {
@@ -526,7 +549,7 @@ function sequenceSequenceOperation(a: Sequence, b: Sequence, opcode: number): nu
   return result;
 }
 
-function compareOperation(a: ProgramValueAny, b: ProgramValueAny, opcode: number): ProgramValueAny {
+function compareOperation(a: ProgramValue, b: ProgramValue, opcode: number): ProgramValue {
   if (typeof a !== "number" && a.kind === KIND.SEQUENCE) {
     if (typeof b === "number") {
       return sequenceNumberOperation(a, b, opcode);
@@ -540,6 +563,45 @@ function compareOperation(a: ProgramValueAny, b: ProgramValueAny, opcode: number
 }
 
 const MAX_STACK_SIZE = MAX_ARRAY_LENGTH * 2;
+
+function stackFrame(state: ProgramState, pcMod: number, currentFrequency?: number): Frame {
+  return Object.freeze({
+    pc: state.pc + pcMod,
+    fp: state.fp,
+    loopIndex: state.loopIndex,
+    currentFrequency: currentFrequency ?? state.currentFrequency,
+    results: state.results,
+    kind: KIND.FRAME,
+  });
+}
+
+function popFrame(state: ProgramState) {
+  state.stack.length = state.fp; // Clear the stack to the frame pointer
+  const frame = state.stack.pop();
+  if (frame == null || typeof frame !== "object" || frame.kind !== KIND.FRAME) {
+    throw new Error("Invalid frame");
+  }
+  state.pc = frame.pc;
+  state.fp = frame.fp;
+  state.loopIndex = frame.loopIndex;
+  state.currentFrequency = frame.currentFrequency;
+  state.results = frame.results;
+}
+
+function getPermutationsCount(state: ProgramState): number {
+  const { stack, fp } = state;
+  let permutationsCount = 1;
+  for (let i = fp; i < stack.length; i++) {
+    const arg = stack[i];
+    if (
+      typeof arg === "object" &&
+      (arg.kind === KIND.NUMBER_LIST || arg.kind === KIND.SEQUENCE_LIST)
+    ) {
+      permutationsCount *= arg.length;
+    }
+  }
+  return permutationsCount;
+}
 
 export function execute(state: ProgramState, maxOps: number): boolean {
   const { program, stack, outputs } = state;
@@ -713,7 +775,7 @@ export function execute(state: ProgramState, maxOps: number): boolean {
       }
       case OPCODE.FUNCTION_INIT: {
         const paramCount = readPc();
-        if (paramCount != stack.length - state.fp) {
+        if (paramCount !== stack.length - state.fp) {
           throw new Error(
             `Function call parameter count mismatch: expected ${paramCount}, got ${stack.length - state.fp}`,
           );
@@ -727,14 +789,15 @@ export function execute(state: ProgramState, maxOps: number): boolean {
               if (typeof arg === "number" || arg.kind === KIND.SEQUENCE) {
                 stack[fp + i] = valueToNumber(arg);
               } else {
-                stack[fp + i] = argList([...valueToDie(arg)]);
+                stack[fp + i] = numberList([...valueToDie(arg)]);
               }
               break;
             case KIND.SEQUENCE:
               if (typeof arg === "number") {
                 stack[fp + i] = sequence([arg]);
               } else if (arg.kind === KIND.COLLECTION || arg.kind === KIND.DIE) {
-                stack[fp + i] = argList(getAllSequences(valueToCollection(arg)));
+                const collection = valueToCollection(arg);
+                stack[fp + i] = sequenceList(getAllSequences(collection));
               } else {
                 stack[fp + i] = arg;
               }
@@ -748,63 +811,76 @@ export function execute(state: ProgramState, maxOps: number): boolean {
               break;
           }
         }
-        const permutations = product(
-          stack
-            .slice(state.fp)
-            .map((arg) => (typeof arg === "object" && arg.kind === KIND.ARGLIST ? arg.length : 1)),
-        );
-        switch (permutations) {
+        const permutationCount = getPermutationsCount(state);
+        switch (permutationCount) {
           case 0:
-            returnValue(state, sequence([])); // Return an empty sequence if there are no permutations
+            popFrame(state);
+            stack.push(sequence([])); // Push an empty sequence if there are no permutations
             break;
           case 1:
             // Convert any ArgLists to their first value, since there's only one permutation
             for (let i = state.fp; i < stack.length; i++) {
               const arg = stack[i];
-              if (typeof arg === "object" && arg.kind === KIND.ARGLIST) {
+              if (
+                typeof arg === "object" &&
+                (arg.kind === KIND.NUMBER_LIST || arg.kind === KIND.SEQUENCE_LIST)
+              ) {
                 stack[i] = arg[0][0];
               }
             }
             state.pc++; // Skip the function loop if there's only one permutation
             break;
           default:
-            if (permutations > MAX_ARRAY_LENGTH) {
+            if (permutationCount > MAX_ARRAY_LENGTH) {
               throw new Error(
-                `Too many permutations: ${permutations}, maximum allowed is ${MAX_ARRAY_LENGTH}`,
+                `Too many permutations: ${permutationCount}, maximum allowed is ${MAX_ARRAY_LENGTH}`,
               );
             }
             state.loopIndex = 0;
+            state.results = [];
             break;
         }
         break;
       }
       case OPCODE.FUNCTION_LOOP: {
-        const args = stack.slice(state.fp, stack.length - state.loopIndex);
-        const argLists = args.filter((arg) => typeof arg === "object" && arg.kind === KIND.ARGLIST);
-        const totalPermutations = product(argLists.map((arg) => arg.length));
-        if (state.loopIndex >= totalPermutations) {
-          const resultList: ArgListItem[] = [];
-          const resultStartIndex = state.fp + args.length;
-          for (let i = 0; i < totalPermutations; i++) {
-            let totalCount = 1;
-            for (const [, count] of permutationArgs(args, i)) {
-              totalCount *= count;
-            }
-            const resultValue = stack[resultStartIndex + i];
-            if (typeof resultValue === "object" && resultValue.kind === KIND.ARGLIST) {
-              throw new Error("Unexpected ArgList in function result");
-            }
-            resultList.push([resultValue, totalCount]);
-          }
-          const resultDie = combineArgList(resultList);
-          returnValue(state, resultDie);
+        const loopIndex = state.loopIndex;
+        if (loopIndex > 0) {
+          const value = valueToDie(pop(stack));
+          state.results.push([value, state.currentFrequency]);
+        }
+        const permutationCount = getPermutationsCount(state);
+        if (loopIndex >= permutationCount) {
+          const result = buildResult(state.results);
+          popFrame(state);
+          stack.push(result);
         } else {
-          stack.push(state.pc - 1, state.fp, state.loopIndex + 1); // Save the current state for the next iteration
-          for (const [arg] of permutationArgs(args, state.loopIndex)) {
-            stack.push(arg);
-          }
+          const fp = state.fp;
+          const paramCount = stack.length - fp;
           state.loopIndex++;
-          state.fp = stack.length - args.length; // Update frame pointer to the new arguments
+          const frameSlot = stack.length;
+          stack.push(0); // Placeholder for the Frame
+          const newFp = stack.length;
+          stack.length += paramCount;
+          let remainingIndex = loopIndex;
+          let currentFrequency = 1;
+          for (let i = 0; i < paramCount; i++) {
+            const arg = stack[fp + i];
+            if (
+              typeof arg === "object" &&
+              (arg.kind === KIND.NUMBER_LIST || arg.kind === KIND.SEQUENCE_LIST)
+            ) {
+              const argListIndex = remainingIndex % arg.length;
+              const [value, count] = arg[argListIndex];
+              stack[newFp + i] = value;
+              currentFrequency *= count;
+              remainingIndex = Math.floor(remainingIndex / arg.length);
+            } else {
+              stack[newFp + i] = arg;
+            }
+          }
+          // Ensure we return back to this instruction
+          stack[frameSlot] = stackFrame(state, -1, currentFrequency);
+          state.fp = newFp;
         }
         break;
       }
@@ -812,14 +888,18 @@ export function execute(state: ProgramState, maxOps: number): boolean {
         const argCount = readPc();
         const functionPtr = readPc();
         // Save the frame pointer and return address
-        stack.splice(stack.length - argCount, 0, state.pc, state.fp, state.loopIndex);
-        state.fp = stack.length - argCount;
+        stack.length++;
+        const newFp = stack.length - argCount;
+        stack.copyWithin(newFp, newFp - 1);
+        stack[newFp - 1] = stackFrame(state, 0);
+        state.fp = newFp;
         state.pc = functionPtr; // Jump to the function
         break;
       }
       case OPCODE.RETURN: {
         const value = pop(stack);
-        returnValue(state, value);
+        popFrame(state);
+        stack.push(value);
         break;
       }
       case OPCODE.LOOP_INIT: {
@@ -864,7 +944,7 @@ export function execute(state: ProgramState, maxOps: number): boolean {
         const outputNames = [...program.outputNames[readPc()]];
 
         let finalName = "";
-        const outputValues: ProgramValueAny[] = [];
+        const outputValues: ProgramValue[] = [];
         for (let i = 0; i < varCount; i++) {
           outputValues.push(pop(stack));
         }
@@ -897,7 +977,9 @@ export function getDebugInfo(state: ProgramState): DebugInfo[] {
     const [, , functionName, variables] = state.program.debugFrames.find(
       ([fromPc, toPc]) => pc >= fromPc && pc < toPc,
     ) ?? [0, 0, "(unknown)", []];
-    const frameVariables = variables.map((name, index) => [name, state.stack[fp + index]] as const);
+    const frameVariables = variables.map(
+      (name, index) => [name, valueToString(state.stack[fp + index])] as const,
+    );
     result.push({
       location: state.program.debugLocations[pc - 1] ?? [-1],
       functionName,
@@ -906,8 +988,12 @@ export function getDebugInfo(state: ProgramState): DebugInfo[] {
     if (fp <= 0) {
       break;
     }
-    pc = state.stack[fp - 3] as number;
-    fp = state.stack[fp - 2] as number;
+    const frame = state.stack[fp - 1];
+    if (typeof frame !== "object" || frame.kind !== KIND.FRAME) {
+      break;
+    }
+    pc = frame.pc;
+    fp = frame.fp;
   }
   return result;
 }

@@ -15,7 +15,7 @@ export type OutputMessage =
   | { type: "progress"; opCount: number; pcMax: number; programSize: number }
   | { type: "result"; outputs: Output[]; opCount: number };
 
-const OPS_PER_PROGRESS_UPDATE = 1000;
+const OPS_PER_PROGRESS_UPDATE = 100_000;
 
 class RuntimeError extends BaseError {
   constructor(message: string, debugInfo: DebugInfo[]) {
@@ -70,11 +70,8 @@ self.onmessage = (event: MessageEvent<InputMessage>) => {
   const { type, programText } = event.data;
   switch (type) {
     case "run":
-      const generator = runProgram(programText);
-      while (true) {
-        const { value, done } = generator.next();
-        if (done) break;
-        self.postMessage(value);
+      for (const message of runProgram(programText)) {
+        self.postMessage(message);
       }
       break;
   }

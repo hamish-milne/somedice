@@ -1,5 +1,4 @@
 import { useStore, useWatch } from "tinystate";
-import { valueToString } from "../lib/common";
 
 const ERROR_TITLES = {
   syntax: "Syntax Error",
@@ -132,16 +131,14 @@ export function ErrorView() {
                   {/* Variables - Inline compact grid */}
                   {frame.variables.length > 0 && (
                     <div className="pl-6 grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-0.5 text-xs font-mono">
-                      {frame.variables
-                        .map(([name, value]) => [name, valueToString(value)])
-                        .map(([name, value], varIndex) => (
-                          <div key={varIndex} className="flex gap-1.5 items-baseline min-w-0">
-                            <span className="text-blue-600 shrink-0">{name}:</span>
-                            <span className="text-gray-700 truncate" title={value}>
-                              {value}
-                            </span>
-                          </div>
-                        ))}
+                      {frame.variables.map(([name, value], varIndex) => (
+                        <div key={varIndex} className="flex gap-1.5 items-baseline min-w-0">
+                          <span className="text-blue-600 shrink-0">{name}:</span>
+                          <span className="text-gray-700 truncate" title={value}>
+                            {value}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
