@@ -8,6 +8,37 @@ function arrayFromPtr<T>(ptr: usize, length: i32): StaticArray<T> {
 
 abstract class AnyValue {
   abstract toString(): string;
+  abstract get typeName(): string;
+  toNumber(): i64 {
+    throw new Error(`Cannot convert ${this.typeName} to number`);
+  }
+  toSequence(): SequenceValue {
+    throw new Error(`Cannot convert ${this.typeName} to sequence`);
+  }
+  toNewSequence(): SequenceValue {
+    return this.toSequence();
+  }
+  toNumberOrDie(): AnyValue {
+    throw new Error(`Cannot convert ${this.typeName} to number or die`);
+  }
+  toNumberOrSequence(): AnyValue {
+    return new NumberValue(this.toNumber());
+  }
+  toDie(): DieValue {
+    throw new Error(`Cannot convert ${this.typeName} to die`);
+  }
+  toNewDie(): DieValue {
+    return this.toDie();
+  }
+  toCollection(): CollectionValue {
+    return new CollectionValue(1, this.toDie().data);
+  }
+  lengthOperation(): i64 {
+    throw new Error(`Cannot get length of ${this.typeName}`);
+  }
+  indexOperation(_index: StaticArray<i64>): AnyValue {
+    throw new Error(`Cannot index ${this.typeName}`);
+  }
 }
 
 @final
@@ -19,8 +50,60 @@ class NumberValue extends AnyValue {
     this.value = value;
   }
 
+  get typeName(): string {
+    return "Number";
+  }
+
   toString(): string {
     return this.value.toString();
+  }
+
+  override toNumber(): i64 {
+    return this.value;
+  }
+
+  override toSequence(): SequenceValue {
+    const arr = new StaticArray<i64>(1);
+    arr[0] = this.value;
+    return new SequenceValue(arr);
+  }
+
+  override toNumberOrDie(): AnyValue {
+    return this;
+  }
+
+  override toNumberOrSequence(): AnyValue {
+    return this;
+  }
+
+  override toDie(): DieValue {
+    return DieValue.fromNumber(this.value);
+  }
+
+  override toNewDie(): DieValue {
+    const arr = new StaticArray<DieEntry>(this.value as i32);
+    for (let i = 0; i < this.value; i++) {
+      arr[i] = new DieEntry(i + 1, 1);
+    }
+    return new DieValue(arr);
+  }
+
+  override lengthOperation(): i64 {
+    return 1;
+  }
+
+  override indexOperation(index: StaticArray<i64>): AnyValue {
+    const value = this.value as f64;
+    // Index by the digit position of the number (1-based)
+    const nDigits = Math.floor(Math.log10(Math.abs(value))) + 1;
+    let result: i64 = 0;
+    for (let i = 0; i < index.length; i++) {
+      const idx = index[i] as f64;
+      if (idx >= 1 && idx <= nDigits) {
+        result += (Math.trunc(value / Math.pow(10, nDigits - idx)) % 10) as i64;
+      }
+    }
+    return new NumberValue(result);
   }
 }
 
@@ -33,8 +116,53 @@ class SequenceValue extends AnyValue {
     this.data = data;
   }
 
+  get typeName(): string {
+    return "Sequence";
+  }
+
   toString(): string {
     return `[${this.data.join(", ")}]`;
+  }
+
+  override toNumber(): i64 {
+    return this.data.reduce(SUM, 0);
+  }
+
+  override toNumberOrDie(): AnyValue {
+    return new NumberValue(this.toNumber());
+  }
+
+  override toSequence(): SequenceValue {
+    return this;
+  }
+
+  override toNumberOrSequence(): AnyValue {
+    return this;
+  }
+
+  override toDie(): DieValue {
+    return DieValue.fromNumber(this.toNumber());
+  }
+
+  override toNewDie(): DieValue {
+    const builder = new DieBuilder();
+    for (let i = 0; i < this.data.length; i++) {
+      builder.addEntry(this.data[i], 1);
+    }
+    return builder.build();
+  }
+
+  override lengthOperation(): i64 {
+    return this.data.length;
+  }
+
+  override indexOperation(index: StaticArray<i64>): AnyValue {
+    let result: i64 = 0;
+    for (let i = 0; i < index.length; i++) {
+      const idx = index[i];
+      result += sequenceIndexNumber(this, idx);
+    }
+    return new NumberValue(result);
   }
 }
 
@@ -56,6 +184,10 @@ class DieValue extends AnyValue {
     this.data = data;
   }
 
+  get typeName(): string {
+    return "Die";
+  }
+
   static fromNumber(value: i64): DieValue {
     const data = new StaticArray<DieEntry>(1);
     data[0] = new DieEntry(value, 1);
@@ -64,6 +196,30 @@ class DieValue extends AnyValue {
 
   toString(): string {
     return `{${this.data.map<string>((entry) => `${entry.value}:${entry.frequency}`).join(", ")}}`;
+  }
+
+  override toDie(): DieValue {
+    return this;
+  }
+
+  override toNumberOrDie(): AnyValue {
+    return this;
+  }
+
+  override toNewSequence(): SequenceValue {
+    const arr = new StaticArray<i64>(this.data.length);
+    for (let i = 0; i < this.data.length; i++) {
+      arr[i] = this.data[i].value;
+    }
+    return new SequenceValue(arr);
+  }
+
+  override lengthOperation(): i64 {
+    return 1;
+  }
+
+  override indexOperation(index: StaticArray<i64>): AnyValue {
+    return this.toCollection().indexOperation(index);
   }
 }
 
@@ -122,8 +278,50 @@ class CollectionValue extends AnyValue {
     this.die = die;
   }
 
+  get typeName(): string {
+    return "Collection";
+  }
+
   toString(): string {
     return `(${this.count}){${this.die.map<string>((entry) => `${entry.value}:${entry.frequency}`).join(", ")}}`;
+  }
+
+  override toCollection(): CollectionValue {
+    return this;
+  }
+
+  override toDie(): DieValue {
+    return collectionToDie(this);
+  }
+
+  override toNumberOrDie(): AnyValue {
+    return this.toDie();
+  }
+
+  override toNewSequence(): SequenceValue {
+    return this.toDie().toNewSequence();
+  }
+
+  override lengthOperation(): i64 {
+    return this.count;
+  }
+
+  override indexOperation(index: StaticArray<i64>): AnyValue {
+    // Create a new die that represents the indexed values of each sequence in the collection
+    const result = new DieBuilder();
+    const sequences = getAllSequences(this.count as i32, this.die);
+    const sequenceCount = sequences.sequenceCount;
+    for (let i = 0; i < sequenceCount; i++) {
+      let value: i64 = 0;
+      for (let j = 0; j < index.length; j++) {
+        const idx = index[j];
+        if (idx >= 1 && idx <= sequences.span) {
+          value += sequences.getValue(i, (idx as i32) - 1);
+        }
+      }
+      result.addEntry(value, sequences.getFrequency(i));
+    }
+    return result.build();
   }
 }
 
@@ -187,6 +385,10 @@ class SequenceList extends AnyValue {
     super();
     this.span = span;
     this.data = data;
+  }
+
+  get typeName(): string {
+    return "SequenceList";
   }
 
   sequenceAt(index: i32): SequenceValue {
@@ -282,6 +484,10 @@ class StackFrame extends AnyValue {
     this.results = state.results;
   }
 
+  get typeName(): string {
+    return "StackFrame";
+  }
+
   restore(state: ProgramState): void {
     state.pc = this.pc;
     state.fp = this.fp;
@@ -290,7 +496,7 @@ class StackFrame extends AnyValue {
     state.results = this.results;
   }
 
-  override toString(): string {
+  toString(): string {
     return `StackFrame(pc=${this.pc}, fp=${this.fp}, loopIndex=${this.loopIndex}, currentFrequency=${this.currentFrequency})`;
   }
 }
@@ -374,32 +580,6 @@ function numberOperation(op: OPCODE, a: i64, b: i64): i64 {
 }
 
 const SUM = (a: i64, b: i64, _: i32, __: StaticArray<i64>): i64 => a + b;
-
-function valueToNumber(value: AnyValue): i64 {
-  if (value instanceof NumberValue) {
-    return (value as NumberValue).value;
-  }
-  if (value instanceof SequenceValue) {
-    return (value as SequenceValue).data.reduce(SUM, 0);
-  }
-  throw new Error("Unsupported value type for conversion to number");
-}
-
-function valueToNumberOrDie(value: AnyValue): AnyValue {
-  if (value instanceof NumberValue) {
-    return value;
-  }
-  if (value instanceof SequenceValue) {
-    return new NumberValue((value as SequenceValue).data.reduce(SUM, 0));
-  }
-  if (value instanceof DieValue) {
-    return value;
-  }
-  if (value instanceof CollectionValue) {
-    return collectionToDie(value as CollectionValue);
-  }
-  throw new Error("Unsupported value type for conversion to number or die");
-}
 
 // Polynomial coefficients indexed from `offset` (the exponent of coeffs[0]).
 class Poly {
@@ -582,6 +762,7 @@ function getAllSequences(n: i32, d: StaticArray<DieEntry>): SequenceListBuilder 
   return result;
 }
 
+@final
 class DiePermutation {
   readonly value: i64;
   readonly frequency: i64;
@@ -672,35 +853,34 @@ function dieUnaryOperation(op: OPCODE, a: DieValue): DieValue {
 
 function binaryOperation(op: OPCODE, a: AnyValue, b: AnyValue): AnyValue {
   if (a instanceof NumberValue && b instanceof NumberValue) {
-    return new NumberValue(numberOperation(op, (a as NumberValue).value, (b as NumberValue).value));
+    return new NumberValue(numberOperation(op, a.toNumber(), b.toNumber()));
   }
   if (a instanceof NumberValue && b instanceof DieValue) {
-    return numberDieOperation(op, (a as NumberValue).value, b as DieValue, false);
+    return numberDieOperation(op, a.toNumber(), b.toDie(), false);
   }
   if (a instanceof DieValue && b instanceof NumberValue) {
-    return numberDieOperation(op, (b as NumberValue).value, a as DieValue, true);
+    return numberDieOperation(op, b.toNumber(), a.toDie(), true);
   }
-  if (a instanceof DieValue && b instanceof DieValue) {
-    return dieDieOperation(op, a as DieValue, b as DieValue);
-  }
-  throw new Error("Unsupported binary operation");
+  return dieDieOperation(op, a.toDie(), b.toDie());
 }
 
 function unaryOperation(op: OPCODE, a: AnyValue): AnyValue {
   if (a instanceof NumberValue) {
-    return new NumberValue(numberUnaryOperation(op, (a as NumberValue).value));
+    return new NumberValue(numberUnaryOperation(op, a.toNumber()));
   }
-  if (a instanceof DieValue) {
-    return dieUnaryOperation(op, a as DieValue);
-  }
-  throw new Error("Unsupported unary operation");
+  return dieUnaryOperation(op, a.toDie());
 }
 
-function sequenceNumberOperation(op: OPCODE, a: SequenceValue, b: NumberValue): NumberValue {
+function sequenceNumberOperation(
+  op: OPCODE,
+  a: SequenceValue,
+  b: NumberValue,
+  reverse: boolean,
+): NumberValue {
   const ad = a.data;
   let result: i64 = 0;
   for (let i = 0; i < ad.length; i++) {
-    result += numberOperation(op, ad[i], b.value);
+    result += reverse ? numberOperation(op, b.value, ad[i]) : numberOperation(op, ad[i], b.value);
   }
   return new NumberValue(result);
 }
@@ -718,15 +898,15 @@ function sequenceSequenceOperation(op: OPCODE, a: SequenceValue, b: SequenceValu
 
 function compareOperation(op: OPCODE, a: AnyValue, b: AnyValue): AnyValue {
   if (a instanceof SequenceValue && b instanceof NumberValue) {
-    return sequenceNumberOperation(op, a as SequenceValue, b as NumberValue);
+    return sequenceNumberOperation(op, a as SequenceValue, b as NumberValue, false);
   }
   if (a instanceof NumberValue && b instanceof SequenceValue) {
-    return sequenceNumberOperation(op, b as SequenceValue, a as NumberValue);
+    return sequenceNumberOperation(op, b as SequenceValue, a as NumberValue, true);
   }
   if (a instanceof SequenceValue && b instanceof SequenceValue) {
     return sequenceSequenceOperation(op, a as SequenceValue, b as SequenceValue);
   }
-  return binaryOperation(op, a, b);
+  return binaryOperation(op, a.toNumberOrDie(), b.toNumberOrDie());
 }
 
 function sequenceIndexNumber(seq: SequenceValue, index: i64): i64 {
@@ -734,130 +914,6 @@ function sequenceIndexNumber(seq: SequenceValue, index: i64): i64 {
     return 0;
   }
   return seq.data[(index as i32) - 1];
-}
-
-function indexOperation(array: AnyValue, index: StaticArray<i64>): AnyValue {
-  if (array instanceof DieValue) {
-    return indexOperation(new CollectionValue(1, (array as DieValue).data), index);
-  }
-  if (array instanceof NumberValue) {
-    const value = (array as NumberValue).value as f64;
-    // Index by the digit position of the number (1-based)
-    const nDigits = Math.floor(Math.log10(Math.abs(value))) + 1;
-    let result: i64 = 0;
-    for (let i = 0; i < index.length; i++) {
-      const idx = index[i] as f64;
-      if (idx >= 1 && idx <= nDigits) {
-        result += (Math.trunc(value / Math.pow(10, nDigits - idx)) % 10) as i64;
-      }
-    }
-    return new NumberValue(result);
-  }
-  if (array instanceof SequenceValue) {
-    let result: i64 = 0;
-    for (let i = 0; i < index.length; i++) {
-      const idx = index[i];
-      result += sequenceIndexNumber(array as SequenceValue, idx);
-    }
-    return new NumberValue(result);
-  }
-  if (array instanceof CollectionValue) {
-    const collection = array as CollectionValue;
-    // Create a new die that represents the indexed values of each sequence in the collection
-    const result = new DieBuilder();
-    const sequences = getAllSequences(collection.count as i32, collection.die);
-    const sequenceCount = sequences.sequenceCount;
-    for (let i = 0; i < sequenceCount; i++) {
-      let value: i64 = 0;
-      for (let j = 0; j < index.length; j++) {
-        const idx = index[j];
-        if (idx >= 1 && idx <= sequences.span) {
-          value += sequences.getValue(i, (idx as i32) - 1);
-        }
-      }
-      result.addEntry(value, sequences.getFrequency(i));
-    }
-    return result.build();
-  }
-  throw new Error("Unsupported value type for indexing");
-}
-
-function lengthOperation(value: AnyValue): i64 {
-  if (value instanceof NumberValue || value instanceof DieValue) {
-    return 1;
-  }
-  if (value instanceof SequenceValue) {
-    return (value as SequenceValue).data.length;
-  }
-  if (value instanceof CollectionValue) {
-    return (value as CollectionValue).count;
-  }
-  throw new Error("Unsupported value type for length operation");
-}
-
-function valueToDie(value: AnyValue): DieValue {
-  if (value instanceof NumberValue) {
-    return DieValue.fromNumber((value as NumberValue).value);
-  }
-  if (value instanceof DieValue) {
-    return value as DieValue;
-  }
-  if (value instanceof CollectionValue) {
-    return collectionToDie(value as CollectionValue);
-  }
-  if (value instanceof SequenceValue) {
-    return DieValue.fromNumber((value as SequenceValue).data.reduce(SUM, 0));
-  }
-  throw new Error("Unsupported value type for conversion to Die");
-}
-
-function valueToNewDie(value: AnyValue): DieValue {
-  if (value instanceof NumberValue) {
-    const numValue = (value as NumberValue).value as i32;
-    const arr = new StaticArray<DieEntry>(numValue);
-    for (let i = 0; i < numValue; i++) {
-      arr[i] = new DieEntry(i + 1, 1);
-    }
-    return new DieValue(arr);
-  }
-  if (value instanceof DieValue) {
-    return value as DieValue;
-  }
-  if (value instanceof CollectionValue) {
-    return collectionToDie(value as CollectionValue);
-  }
-  if (value instanceof SequenceValue) {
-    const data = (value as SequenceValue).data;
-    const builder = new DieBuilder();
-    for (let i = 0; i < data.length; i++) {
-      builder.addEntry(data[i], 1);
-    }
-    return builder.build();
-  }
-  throw new Error("Unsupported value type for conversion to Die");
-}
-
-function valueToNewSequence(value: AnyValue): SequenceValue {
-  if (value instanceof NumberValue) {
-    const arr = new StaticArray<i64>(1);
-    arr[0] = (value as NumberValue).value;
-    return new SequenceValue(arr);
-  }
-  if (value instanceof SequenceValue) {
-    return value as SequenceValue;
-  }
-  if (value instanceof CollectionValue) {
-    value = collectionToDie(value as CollectionValue);
-  }
-  if (value instanceof DieValue) {
-    const data = (value as DieValue).data;
-    const arr = new StaticArray<i64>(data.length);
-    for (let i = 0; i < data.length; i++) {
-      arr[i] = data[i].value;
-    }
-    return new SequenceValue(arr);
-  }
-  throw new Error("Unsupported value type for conversion to Sequence");
 }
 
 enum KIND {
@@ -874,6 +930,10 @@ class NumberList extends AnyValue {
   constructor(data: StaticArray<DieEntry>) {
     super();
     this.data = data;
+  }
+
+  override get typeName(): string {
+    return "NumberList";
   }
 
   toString(): string {
@@ -922,25 +982,19 @@ function functionInit(state: ProgramState): void {
     const arg = stack[fp + i];
     switch (paramKind) {
       case KIND.NUMBER:
-        if (arg instanceof SequenceValue) {
-          stack[fp + i] = new NumberValue((arg as SequenceValue).data.reduce(SUM, 0));
+        if (arg instanceof DieValue || arg instanceof CollectionValue) {
+          stack[fp + i] = new NumberList(arg.toDie().data);
         } else if (!(arg instanceof NumberValue)) {
-          stack[fp + i] = new NumberList(valueToDie(arg).data);
+          stack[fp + i] = new NumberValue(arg.toNumber());
         }
         break;
       case KIND.SEQUENCE:
-        if (arg instanceof NumberValue) {
-          stack[fp + i] = valueToNewSequence(arg);
-        } else if (arg instanceof CollectionValue) {
-          const collection = arg as CollectionValue;
-          stack[fp + i] = getAllSequences(collection.count as i32, collection.die).build();
-        } else if (arg instanceof DieValue) {
-          stack[fp + i] = getAllSequences(1, (arg as DieValue).data).build();
-        }
+        const collection = arg.toCollection();
+        stack[fp + i] = getAllSequences(collection.count as i32, collection.die).build();
         break;
       case KIND.DIE:
-        if (arg instanceof NumberValue || arg instanceof SequenceValue) {
-          stack[fp + i] = valueToDie(arg);
+        if (!(arg instanceof CollectionValue)) {
+          stack[fp + i] = arg.toDie();
         }
         break;
       default:
@@ -977,7 +1031,7 @@ function functionLoop(state: ProgramState): void {
   const fp = state.fp;
   const loopIndex = state.loopIndex;
   if (loopIndex > 0) {
-    const value = valueToDie(stack.pop());
+    const value = stack.pop().toDie();
     state.results.addResult(value, state.currentFrequency);
   }
   const paramCount = stack.length - fp;
@@ -1052,9 +1106,9 @@ function execute(state: ProgramState, maxOps: i32): boolean {
       case OPCODE.EXPONENT:
       case OPCODE.AND:
       case OPCODE.OR: {
-        const b = stack.pop();
-        const a = stack.pop();
-        const result = binaryOperation(opcode, valueToNumberOrDie(a), valueToNumberOrDie(b));
+        const b = stack.pop().toNumberOrDie();
+        const a = stack.pop().toNumberOrDie();
+        const result = binaryOperation(opcode, a, b);
         stack.push(result);
         break;
       }
@@ -1072,14 +1126,14 @@ function execute(state: ProgramState, maxOps: i32): boolean {
       }
       case OPCODE.UNARY_MINUS:
       case OPCODE.NOT: {
-        const a = stack.pop();
-        const result = unaryOperation(opcode, valueToNumberOrDie(a));
+        const a = stack.pop().toNumberOrDie();
+        const result = unaryOperation(opcode, a);
         stack.push(result);
         break;
       }
       case OPCODE.D: {
-        const b = valueToNewDie(stack.pop());
-        const a = valueToNumberOrDie(stack.pop());
+        const b = stack.pop().toNewDie();
+        const a = stack.pop().toNumberOrDie();
         if (a instanceof NumberValue) {
           stack.push(new CollectionValue((a as NumberValue).value, b.data));
         } else if (a instanceof DieValue) {
@@ -1089,13 +1143,13 @@ function execute(state: ProgramState, maxOps: i32): boolean {
       }
       case OPCODE.UNARY_D: {
         const a = stack.pop();
-        const result = valueToNewDie(a);
+        const result = a.toNewDie();
         stack.push(result);
         break;
       }
       case OPCODE.LENGTH: {
         const a = stack.pop();
-        const result = lengthOperation(a);
+        const result = a.lengthOperation();
         stack.push(new NumberValue(result));
         break;
       }
@@ -1111,13 +1165,13 @@ function execute(state: ProgramState, maxOps: i32): boolean {
         } else {
           throw new Error("Index must be a number or sequence");
         }
-        const result = indexOperation(a, index);
+        const result = a.indexOperation(index);
         stack.push(result);
         break;
       }
       case OPCODE.RANGE: {
-        const b = valueToNumber(stack.pop());
-        const a = valueToNumber(stack.pop());
+        const b = stack.pop().toNumber();
+        const a = stack.pop().toNumber();
         const start = min(a, b);
         const end = max(a, b);
         const length = end - start + 1;
@@ -1132,7 +1186,7 @@ function execute(state: ProgramState, maxOps: i32): boolean {
         const count = code[state.pc++];
         const seq = new SequenceBuilder();
         for (let i = 0; i < count; i++) {
-          const entry = valueToNewSequence(stack[stack.length - count + i]).data;
+          const entry = stack[stack.length - count + i].toNewSequence().data;
           const s = seq.length;
           seq.length += entry.length;
           for (let j = 0; j < entry.length; j++) {
@@ -1170,7 +1224,7 @@ function execute(state: ProgramState, maxOps: i32): boolean {
       }
       case OPCODE.JUMP_IF_FALSE: {
         const target = code[state.pc++];
-        const condition = valueToNumber(stack.pop());
+        const condition = stack.pop().toNumber();
         if (condition === 0) {
           state.pc += target;
         }
@@ -1237,7 +1291,7 @@ function execute(state: ProgramState, maxOps: i32): boolean {
         break;
       }
       case OPCODE.OUTPUT: {
-        const value = valueToDie(stack.pop());
+        const value = stack.pop().toDie();
         state.outputs.push(value);
         break;
       }
