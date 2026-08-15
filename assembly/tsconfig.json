@@ -1,7 +1,0 @@
-{
-  "compilerOptions": {
-    "target": "es2015"
-  },
-  "extends": "../node_modules/.pnpm/assemblyscript@0.28.20/node_modules/assemblyscript/std/assembly.json",
-  "include": ["./**/*.ts"]
-}
