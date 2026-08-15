@@ -5,7 +5,11 @@
     "lint": "tsc && vp lint",
     "build": "vp build",
     "test": "vp test --coverage",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "asbuild:debug": "asc assembly/index.ts --target debug",
+    "asbuild:release": "asc assembly/index.ts --target release",
+    "asbuild": "npm run asbuild:debug && npm run asbuild:release",
+    "start": "npx serve ."
   },
   "dependencies": {
     "@mdx-js/rollup": "^3.1.1",
@@ -15,6 +19,7 @@
     "@types/mdx": "^2.0.14",
     "@types/node": "^26.2.0",
     "@vitest/coverage-v8": "^4.1.10",
+    "assemblyscript": "^0.28.20",
     "chart.js": "^4.5.1",
     "preact": "^10.29.8",
     "react": "^19.2.8",
@@ -27,5 +32,14 @@
     "typescript": "^7.0.2",
     "vite-plus": "^0.2.6"
   },
-  "packageManager": "pnpm@11.18.0+sha512.33d83c77da82f49fba836925c6f1b841181ec3132b670639bd012f7075f5c7cf634c5f870147c19aae7478fac01df09d8892e880454896edd23ee9b33757563c"
+  "packageManager": "pnpm@11.18.0+sha512.33d83c77da82f49fba836925c6f1b841181ec3132b670639bd012f7075f5c7cf634c5f870147c19aae7478fac01df09d8892e880454896edd23ee9b33757563c",
+  "exports": {
+    ".": {
+      "import": "./build/release.js",
+      "types": "./build/release.d.ts"
+    }
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.28.20"
+  }
 }
