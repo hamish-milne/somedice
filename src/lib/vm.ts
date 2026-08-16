@@ -1,4 +1,12 @@
-import { KIND, OPCODE, type DebugInfo, type DieItem, type Output, type Program } from "./common";
+import {
+  KIND,
+  OPCODE,
+  OUTPUT_NAME_VARIABLES,
+  type DebugInfo,
+  type DieItem,
+  type Output,
+  type Program,
+} from "./common";
 
 const { freeze, assign } = Object;
 const { from: arrayFrom } = Array;
@@ -917,24 +925,13 @@ export function execute(state: ProgramState, maxOps: number): boolean {
       }
       case OPCODE.OUTPUT_NAMED: {
         const varCount = readPc();
-        const outputNames = [...program.outputNames[readPc()]];
-
-        let finalName = "";
-        const outputValues: ProgramValue[] = [];
-        for (let i = 0; i < varCount; i++) {
-          outputValues.push(pop(stack));
-        }
-        do {
-          const namePart = outputNames.shift();
-          if (namePart != null) {
-            finalName += namePart;
-          }
-          const valuePart = outputValues.shift();
-          if (valuePart != null) {
-            finalName += valueToString(valuePart);
-          }
-        } while (outputNames.length > 0 && outputValues.length > 0);
+        const outputName = program.outputNames[readPc()];
+        const vars = stack.slice(stack.length - varCount);
+        stack.length -= varCount;
         const outputValue = valueToDie(pop(stack));
+        const finalName = outputName.replace(OUTPUT_NAME_VARIABLES, () =>
+          valueToString(vars.shift() ?? 0),
+        );
         outputs.push([finalName, outputValue]);
         break;
       }
@@ -1430,7 +1427,7 @@ if (import.meta.vitest) {
       code,
       debugLocations: [],
       debugFrames: [],
-      outputNames: [["Result ", ":"]],
+      outputNames: ["Result [X]"],
     };
     const state = newState(program);
     const finished = execute(state, 1000);

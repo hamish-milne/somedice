@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+@custom-variant sm {
+  @media (width >= 40rem) and (height >= 40rem) {
+    @slot;
+  }
+}
+
 .markdown-alert {
   @apply border-l-4 p-4 mb-4 rounded-md shadow-sm;
   @apply transition-all duration-200 hover:shadow-md;

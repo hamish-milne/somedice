@@ -7,6 +7,7 @@ import {
   type Location,
   BaseError,
   type DebugFrame,
+  OUTPUT_NAME_VARIABLES,
 } from "./common";
 
 const { freeze, values, entries, fromEntries } = Object;
@@ -97,15 +98,15 @@ const TOKEN_NAME_MAP = freeze(
 );
 
 const TOKEN_PATTERN_MAP: readonly [number, RegExp][] = freeze([
-  [TOKEN.VARIABLE, /[A-Z_]+/y],
-  [TOKEN.NUMBER, /0|(?:[1-9][0-9]*)/y],
-  [TOKEN.KEYWORD, /[a-z]+/y],
-  [TOKEN.STRING, /"[^"]*"/y],
+  [TOKEN.VARIABLE, /[A-Z_]+/uy],
+  [TOKEN.NUMBER, /0|(?:[1-9][0-9]*)/uy],
+  [TOKEN.KEYWORD, /[a-z]+/uy],
+  [TOKEN.STRING, /"[^"]*"/uy],
 ]);
 
 // Match whitespace but not newline:
-const PATTERN_SPACE = /[ \t]+/y;
-const PATTERN_COMMENT = /\\[^\\]*\\/y;
+const PATTERN_SPACE = /[ \t]+/uy;
+const PATTERN_COMMENT = /\\[^\\]*\\/uy;
 
 type Token = readonly [token: number, value: string, location: Location];
 
@@ -119,7 +120,7 @@ type ParserState = {
   globals: string[];
   locals: string[] | undefined;
   functions: [name: (string | null)[], ptr: number][];
-  outputNames: string[][];
+  outputNames: string[];
   code: number[];
   debugLocations: Location[];
   debugFrames: DebugFrame[];
@@ -556,42 +557,8 @@ function parseFunction(state: ParserState) {
   state.locals = undefined;
 }
 
-function tokenizeOutputName(str: string): string[] {
-  // "foo [BAR][BAZ] bat [invalid thing] [" => ["foo ", "BAR", "", "BAZ", " bat [invalid thing] ["]
-  const result: string[] = [];
-  let current = "";
-  let i = 0;
-
-  while (i < str.length) {
-    if (str[i] === "[") {
-      const closeIdx = str.indexOf("]", i);
-      if (closeIdx === -1) {
-        // No closing bracket, treat as regular text
-        current += str.substring(i);
-        break;
-      }
-
-      const bracketed = str.substring(i + 1, closeIdx);
-      // Check if bracketed token is all uppercase letters
-      if (bracketed.length > 0 && /^[A-Z]+$/.test(bracketed)) {
-        // Valid token: push current text and the token
-        result.push(current);
-        result.push(bracketed);
-        current = "";
-        i = closeIdx + 1;
-      } else {
-        // Invalid token: treat as regular text
-        current += str.substring(i, closeIdx + 1);
-        i = closeIdx + 1;
-      }
-    } else {
-      current += str[i];
-      i++;
-    }
-  }
-
-  result.push(current);
-  return result;
+function getOutputVariables(str: string): string[] {
+  return Array.from(str.matchAll(OUTPUT_NAME_VARIABLES), (m) => m[1]);
 }
 
 function parseOutput(state: ParserState) {
@@ -601,20 +568,13 @@ function parseOutput(state: ParserState) {
   parseExpression(state);
   const token = nextToken(state);
   if (token[0] === TOKEN.NAMED) {
-    const outputName = expectToken(state, TOKEN.STRING);
-    const tokenizedName = tokenizeOutputName(outputName.slice(1, -1)); // Remove surrounding quotes
-    const stringParts: string[] = [];
-    let varCount = 0;
-    for (let i = 0; i < tokenizedName.length; i++) {
-      if (i % 2 === 0) {
-        stringParts.push(tokenizedName[i]);
-      } else {
-        loadVar(state, tokenizedName[i]);
-        varCount++;
-      }
+    const outputName = expectToken(state, TOKEN.STRING).slice(1, -1); // Remove surrounding quotes
+    const variables = getOutputVariables(outputName);
+    for (const variable of variables) {
+      loadVar(state, variable);
     }
-    pushCode(state, OPCODE.OUTPUT_NAMED, varCount, state.outputNames.length);
-    state.outputNames.push(stringParts);
+    pushCode(state, OPCODE.OUTPUT_NAMED, variables.length, state.outputNames.length);
+    state.outputNames.push(outputName);
   } else {
     backtrack(state, token);
     pushCode(state, OPCODE.OUTPUT);
@@ -705,17 +665,11 @@ if (import.meta.vitest) {
 
   describe("tokenizeOutputName", () => {
     it("should tokenize output names correctly", () => {
-      expect(tokenizeOutputName("foo [BAR][BAZ] bat [invalid thing] [")).toEqual([
-        "foo ",
-        "BAR",
-        "",
-        "BAZ",
-        " bat [invalid thing] [",
-      ]);
-      expect(tokenizeOutputName("[FOO][BAR]")).toEqual(["", "FOO", "", "BAR", ""]);
-      expect(tokenizeOutputName("no brackets")).toEqual(["no brackets"]);
-      expect(tokenizeOutputName("[VALID][123]")).toEqual(["", "VALID", "[123]"]);
-      expect(tokenizeOutputName("[A][B][C]")).toEqual(["", "A", "", "B", "", "C", ""]);
+      expect(getOutputVariables("foo [BAR][BAZ] bat [invalid thing] [")).toEqual(["BAR", "BAZ"]);
+      expect(getOutputVariables("[FOO][BAR]")).toEqual(["FOO", "BAR"]);
+      expect(getOutputVariables("no brackets")).toEqual([]);
+      expect(getOutputVariables("[VALID][123]")).toEqual(["VALID"]);
+      expect(getOutputVariables("[A][B][C]")).toEqual(["A", "B", "C"]);
     });
   });
 
@@ -795,7 +749,7 @@ if (import.meta.vitest) {
         1,
         0,
       ]);
-      expect(program.outputNames).toEqual([["Output ", ""]]);
+      expect(program.outputNames).toEqual(["Output [BAR]"]);
     });
 
     it("should handle operator precedence correctly", () => {

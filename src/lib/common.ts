@@ -77,7 +77,7 @@ export type DebugFrame = readonly [
 
 export type Program = {
   code: number[];
-  outputNames: string[][];
+  outputNames: string[];
   debugLocations: Location[];
   debugFrames: readonly DebugFrame[];
 };
@@ -100,3 +100,5 @@ export abstract class BaseError extends Error {
 
   abstract errorType(): "syntax" | "compiler" | "runtime";
 }
+
+export const OUTPUT_NAME_VARIABLES = /\[([A-Z]+)\]/gu;
