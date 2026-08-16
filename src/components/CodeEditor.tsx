@@ -21,7 +21,7 @@ export function CodeEditor() {
       <textarea
         spellcheck={false}
         autocorrect="off"
-        autocapitalize="off"
+        autocapitalize="none"
         autocomplete="off"
         placeholder={"Enter your dice code here..."}
         className="flex-1 p-2 sm:p-4 font-mono text-sm resize-none border border-gray-300 outline-0 focus:outline-2 focus:outline-blue-500"

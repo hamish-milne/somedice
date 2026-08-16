@@ -17,7 +17,7 @@ export type Collection = readonly [count: number, die: Die] & {
 export type NumberList = readonly DieItem[] & {
   readonly kind: typeof KIND.NUMBER_LIST;
 };
-export type SequenceListItem = readonly [sequence: Sequence, count: number];
+export type SequenceListItem = readonly [sequence: Sequence, probability: number];
 export type SequenceList = readonly SequenceListItem[] & {
   readonly kind: typeof KIND.SEQUENCE_LIST;
 };
@@ -47,14 +47,14 @@ export function valueToString(value: ProgramValue): string {
     case KIND.DIE:
       return `{${value
         .slice(0, MAX_STRING_ITEMS)
-        .map(([v, c]) => `${v}:${c}`)
+        .map(([v]) => `${v}`)
         .join(",")}${ellipsis}}`;
     case KIND.COLLECTION:
       return `${value[0]}d${valueToString(value[1])}`;
     case KIND.NUMBER_LIST:
       return `<${value
         .slice(0, MAX_STRING_ITEMS)
-        .map(([v, c]) => `${valueToString(v)}:${c}`)
+        .map(([v]) => `${valueToString(v)}`)
         .join(",")}${ellipsis}>`;
     default:
       return "<unknown>";
@@ -85,10 +85,6 @@ function numberList(items: DieItem[]): NumberList {
 
 function sequenceList(items: SequenceListItem[]): SequenceList {
   return freeze(assign(items, KIND_SEQUENCE_LIST));
-}
-
-function totalWeight(d: Die): number {
-  return d.reduce((acc, [, count]) => acc + count, 0);
 }
 
 function checkResult(value: number) {
@@ -153,12 +149,16 @@ function dieMapAdd(map: Map<number, number>, value: number, count: number) {
   map.set(value, (map.get(value) || 0) + count);
 }
 
+const MIN_PROBABILITY = 1e-6;
+
 function dieMapFinish(map: Map<number, number>): DieItem[] {
-  return arrayFrom(map.entries()).map(([value, count]) => dieItem(value, count));
+  return arrayFrom(map.entries())
+    .filter(([_, count]) => count > MIN_PROBABILITY)
+    .map(([value, count]) => dieItem(value, count));
 }
 
 function dNumber(d: number): Die {
-  return die(arrayFrom({ length: d }, (_, i) => dieItem(i + 1, 1)));
+  return die(arrayFrom({ length: d }, (_, i) => dieItem(i + 1, 1 / d)));
 }
 
 function valueToDie(x: ProgramValue): Die {
@@ -186,7 +186,7 @@ function valueToNewDie(x: ProgramValue): Die {
     case KIND.SEQUENCE: {
       const map = dieMap();
       for (const value of x) {
-        dieMapAdd(map, value, 1);
+        dieMapAdd(map, value, 1 / x.length);
       }
       return die(dieMapFinish(map));
     }
@@ -240,14 +240,10 @@ function sum(n: readonly number[]): number {
   return n.reduce((acc, val) => acc + val, 0);
 }
 
-function product(n: readonly number[]): number {
-  return n.reduce((acc, val) => acc * val, 1);
-}
-
 const NUMBER_DESCENDING = (a: number, b: number) => b - a;
 
 const MAX_SAFE_NUMBER = 1e300;
-const MAX_ARRAY_LENGTH = 5e8;
+const MAX_ARRAY_LENGTH = 1e9;
 
 function getAllSequences([n, d]: Collection): SequenceListItem[] {
   const vals = d.map((e) => e[0]);
@@ -260,9 +256,6 @@ function getAllSequences([n, d]: Collection): SequenceListItem[] {
   fact[0] = 1;
   for (let i = 1; i <= n; i++) {
     fact[i] = fact[i - 1] * i;
-    if (fact[i] > MAX_SAFE_NUMBER) {
-      throw new Error(`getAllSequences: n=${n} is too large - factorial exceeds MAX_SAFE_NUMBER`);
-    }
   }
 
   const results: SequenceListItem[] = [];
@@ -281,7 +274,9 @@ function getAllSequences([n, d]: Collection): SequenceListItem[] {
           `getAllSequences: n=${n} is too large - more than ${MAX_ARRAY_LENGTH} values generated`,
         );
       }
-      results.push([sequence(seq.slice().sort(NUMBER_DESCENDING)), total]);
+      if (total > MIN_PROBABILITY) {
+        results.push([sequence(seq.slice().sort(NUMBER_DESCENDING)), total]);
+      }
       for (let j = 0; j < remaining; j++) seq.pop();
       return;
     }
@@ -341,7 +336,7 @@ function collectionSum([n, d]: readonly [number, Die]): Die {
 
   const output: DieItem[] = [];
   for (let i = 0; i < result.coeffs.length; i++) {
-    if (result.coeffs[i] > 0) {
+    if (result.coeffs[i] > MIN_PROBABILITY) {
       output.push([result.offset + i, result.coeffs[i]]);
       if (output.length > MAX_ARRAY_LENGTH) {
         throw new Error(
@@ -353,32 +348,16 @@ function collectionSum([n, d]: readonly [number, Die]): Die {
   return die(output);
 }
 
-function gcd(a: number, b: number): number {
-  while (b !== 0) {
-    const temp = b;
-    b = a % b;
-    a = temp;
-  }
-  return a;
-}
-
-function lcm(values: number[]): number {
-  return values.reduce((acc, val) => (acc * val) / gcd(acc, val), 1);
-}
-
 function dDieDie(n: Die, d: Die): Die {
   const result = dieMap();
   const allPermuted = n.map(([value, count]) => {
     const permuted = collectionSum([value, d]);
-    return [value, count, permuted, totalWeight(permuted)] as const;
+    return [value, count, permuted] as const;
   });
-  const allPermutedWeights = allPermuted.map(([, , , weight]) => weight);
-  const totalCollectionWeight =
-    product(allPermutedWeights) < Number.MAX_SAFE_INTEGER ? lcm(allPermutedWeights) : 1;
 
-  for (const [, count, permuted, weight] of allPermuted) {
+  for (const [, count, permuted] of allPermuted) {
     for (const [seq, permCount] of permuted) {
-      const combinedCount = count * permCount * (totalCollectionWeight / weight);
+      const combinedCount = count * permCount;
       dieMapAdd(result, seq, combinedCount);
     }
   }
@@ -388,13 +367,10 @@ function dDieDie(n: Die, d: Die): Die {
 function buildResult(results: readonly ResultItem[]): Die {
   const result = dieMap();
   const dice = results.map(([arg, count]) => [valueToDie(arg), count] as const);
-  const allWeights = dice.map(([die]) => totalWeight(die));
-  const totalResultWeight = product(allWeights) < Number.MAX_SAFE_INTEGER ? lcm(allWeights) : 1;
   for (let i = 0; i < dice.length; i++) {
     const [die, count] = dice[i];
-    const weight = allWeights[i];
     for (const [value, dieCount] of die) {
-      const combinedCount = count * dieCount * (totalResultWeight / weight);
+      const combinedCount = count * dieCount;
       dieMapAdd(result, value, combinedCount);
     }
   }
@@ -1065,9 +1041,9 @@ if (import.meta.vitest) {
       runCode(
         [IMMEDIATE, 2, IMMEDIATE, 3, UNARY_D, ADD, OUTPUT],
         die([
-          [3, 1],
-          [4, 1],
-          [5, 1],
+          [3, 1 / 3],
+          [4, 1 / 3],
+          [5, 1 / 3],
         ]),
       );
     });
@@ -1076,9 +1052,9 @@ if (import.meta.vitest) {
       runCode(
         [IMMEDIATE, 3, UNARY_D, IMMEDIATE, 2, ADD, OUTPUT],
         die([
-          [3, 1],
-          [4, 1],
-          [5, 1],
+          [3, 1 / 3],
+          [4, 1 / 3],
+          [5, 1 / 3],
         ]),
       );
     });
@@ -1087,10 +1063,10 @@ if (import.meta.vitest) {
       runCode(
         [IMMEDIATE, 2, UNARY_D, IMMEDIATE, 3, UNARY_D, ADD, OUTPUT],
         die([
-          [2, 1],
-          [3, 2],
-          [4, 2],
-          [5, 1],
+          [2, 1 / 6],
+          [3, 1 / 3],
+          [4, 1 / 3],
+          [5, 1 / 6],
         ]),
       );
     });
@@ -1222,13 +1198,13 @@ if (import.meta.vitest) {
       runCode(
         [IMMEDIATE, 2, IMMEDIATE, 4, D, OUTPUT],
         die([
-          [2, 1],
-          [3, 2],
-          [4, 3],
-          [5, 4],
-          [6, 3],
-          [7, 2],
-          [8, 1],
+          [2, 1 / 16],
+          [3, 1 / 8],
+          [4, 3 / 16],
+          [5, 1 / 4],
+          [6, 3 / 16],
+          [7, 1 / 8],
+          [8, 1 / 16],
         ]),
       );
     });
@@ -1237,9 +1213,9 @@ if (import.meta.vitest) {
       runCode(
         [IMMEDIATE, 2, IMMEDIATE, 3, IMMEDIATE, 5, SEQUENCE, 2, D, OUTPUT],
         die([
-          [6, 1],
-          [8, 2],
-          [10, 1],
+          [6, 1 / 4],
+          [8, 1 / 2],
+          [10, 1 / 4],
         ]),
       );
     });
@@ -1248,22 +1224,22 @@ if (import.meta.vitest) {
       runCode(
         [IMMEDIATE, 0, IMMEDIATE, 0, IMMEDIATE, 1, SEQUENCE, 3, UNARY_D, IMMEDIATE, 2, D, OUTPUT],
         die([
-          [0, 4],
-          [1, 1],
-          [2, 1],
+          [0, 2 / 3],
+          [1, 1 / 6],
+          [2, 1 / 6],
         ]),
       );
 
       runCode(
         [IMMEDIATE, 2, IMMEDIATE, 2, D, IMMEDIATE, 2, D, OUTPUT],
         die([
-          [2, 4],
-          [3, 12],
-          [4, 17],
-          [5, 16],
-          [6, 10],
-          [7, 4],
-          [8, 1],
+          [2, 4 / 64],
+          [3, 12 / 64],
+          [4, 17 / 64],
+          [5, 16 / 64],
+          [6, 10 / 64],
+          [7, 4 / 64],
+          [8, 1 / 64],
         ]),
       );
     });
@@ -1272,9 +1248,9 @@ if (import.meta.vitest) {
       runCode(
         [IMMEDIATE, 3, UNARY_D, OUTPUT],
         die([
-          [1, 1],
-          [2, 1],
-          [3, 1],
+          [1, 1 / 3],
+          [2, 1 / 3],
+          [3, 1 / 3],
         ]),
       );
     });
@@ -1289,9 +1265,9 @@ if (import.meta.vitest) {
       runCode(
         [IMMEDIATE, 3, UNARY_D, UNARY_MINUS, OUTPUT],
         die([
-          [-3, 1],
-          [-2, 1],
-          [-1, 1],
+          [-3, 1 / 3],
+          [-2, 1 / 3],
+          [-1, 1 / 3],
         ]),
       );
     });
@@ -1305,9 +1281,9 @@ if (import.meta.vitest) {
       runCode(
         [IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, D, AT, OUTPUT],
         die([
-          [1, 1],
-          [2, 3],
-          [3, 5],
+          [1, 1 / 9],
+          [2, 3 / 9],
+          [3, 5 / 9],
         ]),
       );
     });
@@ -1320,13 +1296,13 @@ if (import.meta.vitest) {
       runCode(
         [IMMEDIATE, 1, IMMEDIATE, 2, SEQUENCE, 2, IMMEDIATE, 3, IMMEDIATE, 4, D, AT, OUTPUT],
         die([
-          [2, 1],
-          [3, 3],
-          [4, 7],
-          [5, 12],
-          [6, 16],
-          [7, 15],
-          [8, 10],
+          [2, 1 / 64],
+          [3, 3 / 64],
+          [4, 7 / 64],
+          [5, 12 / 64],
+          [6, 16 / 64],
+          [7, 15 / 64],
+          [8, 10 / 64],
         ]),
       );
     });
@@ -1425,10 +1401,10 @@ if (import.meta.vitest) {
         OUTPUT,
       ],
       die([
-        [6, 1],
-        [7, 3],
-        [8, 3],
-        [9, 1],
+        [6, 1 / 8],
+        [7, 3 / 8],
+        [8, 3 / 8],
+        [9, 1 / 8],
       ]),
     );
   });

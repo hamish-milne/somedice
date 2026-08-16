@@ -81,7 +81,7 @@ export type Program = {
   debugLocations: Location[];
   debugFrames: readonly DebugFrame[];
 };
-export type DieItem = readonly [value: number, count: number];
+export type DieItem = readonly [value: number, probability: number];
 
 export type Output = [name: string, value: readonly DieItem[]];
 

@@ -20,11 +20,12 @@ import { useMemo } from "preact/hooks";
 // Register Chart.js components
 ChartJS.register(LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-function* seriesColorGenerator() {
-  let hue = 0;
-  while (true) {
-    yield [`hsl(${hue}, 70%, 50%)`, `hsla(${hue}, 70%, 50%, 0.5)`];
-    hue = (hue + 60) % 360; // Change hue for next color
+function* seriesColorGenerator(n: number) {
+  for (let i = 0; i < n; i++) {
+    const hue = (i * 360) / n;
+    const borderColor = `hsl(${hue}, 70%, 50%)`;
+    const backgroundColor = `hsla(${hue}, 70%, 50%, 0.5)`;
+    yield [borderColor, backgroundColor];
   }
 }
 
@@ -38,17 +39,16 @@ function* labelGenerator() {
 
 function outputsToChartData(outputs: Output[], displayMode: DisplayMode): ChartData<"scatter"> {
   const datasets: ChartDataset<"scatter", Point[]>[] = [];
-  const colorGen = seriesColorGenerator();
+  const colorGen = seriesColorGenerator(outputs.length);
   const labelGen = labelGenerator();
 
   for (const [name, die] of outputs) {
     const [borderColor, backgroundColor] = colorGen.next().value!;
     const label = name || labelGen.next().value!;
 
-    const totalWeight = die.reduce((sum, [, weight]) => sum + weight, 0);
     const points: { x: number; y: number }[] = die.map(([value, weight]) => ({
       x: value,
-      y: 100 * (weight / totalWeight), // Normalize to probability
+      y: 100 * weight, // Normalize to probability
     }));
     // Add points with y=0 for values not present in the die to ensure a continuous line
     if (points.length > 0) {
