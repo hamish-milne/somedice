@@ -14,7 +14,10 @@ export function CodeEditor() {
   return (
     <div className="h-full flex flex-col data-hidden:hidden">
       <div className="bg-gray-100 px-4 py-2 border-b border-gray-300 hidden sm:flex">
-        <label htmlFor="inputCode" className="text-sm font-semibold text-gray-700">
+        <label
+          htmlFor="inputCode"
+          className="text-sm font-semibold text-gray-700"
+        >
           Code Editor
         </label>
       </div>

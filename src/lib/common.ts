@@ -52,6 +52,7 @@ export const OPCODE = freeze({
   FUNCTION_INIT: 35,
   FUNCTION_LOOP: 36,
   RESERVE: 37,
+  SYSCALL: 38,
 });
 export type OPCODE = ValueOf<typeof OPCODE>;
 

@@ -18,7 +18,14 @@ import type { DisplayMode } from "../App";
 import { useMemo } from "preact/hooks";
 
 // Register Chart.js components
-ChartJS.register(LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+ChartJS.register(
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+);
 
 function* seriesColorGenerator(n: number) {
   for (let i = 0; i < n; i++) {
@@ -37,7 +44,10 @@ function* labelGenerator() {
   }
 }
 
-function outputsToChartData(outputs: Output[], displayMode: DisplayMode): ChartData<"scatter"> {
+function outputsToChartData(
+  outputs: Output[],
+  displayMode: DisplayMode,
+): ChartData<"scatter"> {
   const datasets: ChartDataset<"scatter", Point[]>[] = [];
   const colorGen = seriesColorGenerator(outputs.length);
   const labelGen = labelGenerator();
@@ -136,8 +146,12 @@ export function ChartArea() {
   const outputs = useWatch(store, "outputs");
   const displayMode = useWatch(store, "displayMode");
   const displayState = useWatch(store, "displayState");
-  const isVisible = displayState === "output" && displayMode !== "documentation";
-  const data = useMemo(() => outputsToChartData(outputs, displayMode), [outputs, displayMode]);
+  const isVisible =
+    displayState === "output" && displayMode !== "documentation";
+  const data = useMemo(
+    () => outputsToChartData(outputs, displayMode),
+    [outputs, displayMode],
+  );
 
   return (
     <div

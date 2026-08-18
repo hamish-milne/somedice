@@ -26,9 +26,12 @@ export function ErrorView() {
   const errorLine = primaryLocation ? primaryLocation[0] : null;
   const errorColumn = primaryLocation ? primaryLocation[1] : null;
 
-  const snippetStart = errorLine !== null ? Math.max(0, errorLine - ERROR_CONTEXT) : 0;
+  const snippetStart =
+    errorLine !== null ? Math.max(0, errorLine - ERROR_CONTEXT) : 0;
   const snippetEnd =
-    errorLine !== null ? Math.min(lines.length, errorLine + ERROR_CONTEXT + 1) : lines.length;
+    errorLine !== null
+      ? Math.min(lines.length, errorLine + ERROR_CONTEXT + 1)
+      : lines.length;
   const snippetLines = lines.slice(snippetStart, snippetEnd);
 
   return (
@@ -78,7 +81,10 @@ export function ErrorView() {
                 const isErrorLine = lineNumber === errorLine;
 
                 return (
-                  <div key={index} className={`flex ${isErrorLine ? "bg-red-900/30" : ""}`}>
+                  <div
+                    key={index}
+                    className={`flex ${isErrorLine ? "bg-red-900/30" : ""}`}
+                  >
                     {/* Line Number */}
                     <div
                       className={`select-none px-3 py-0.5 text-right min-w-12 border-r ${
@@ -92,7 +98,11 @@ export function ErrorView() {
 
                     {/* Code Line */}
                     <div className="flex-1 px-3 py-0.5">
-                      <span className={isErrorLine ? "text-red-100" : "text-gray-300"}>
+                      <span
+                        className={
+                          isErrorLine ? "text-red-100" : "text-gray-300"
+                        }
+                      >
                         {line || " "}
                       </span>
                       {isErrorLine && errorColumn !== null && (
@@ -116,7 +126,10 @@ export function ErrorView() {
             </div>
             <div className="space-y-2">
               {debugInfo.map((frame, index) => (
-                <div key={index} className="bg-gray-50 border border-gray-200 rounded px-3 py-2">
+                <div
+                  key={index}
+                  className="bg-gray-50 border border-gray-200 rounded px-3 py-2"
+                >
                   {/* Frame Header */}
                   <div className="flex items-baseline gap-2 text-xs mb-1.5">
                     <span className="text-gray-400 font-mono">#{index}</span>
@@ -132,9 +145,17 @@ export function ErrorView() {
                   {frame.variables.length > 0 && (
                     <div className="pl-6 grid grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-0.5 text-xs font-mono">
                       {frame.variables.map(([name, value], varIndex) => (
-                        <div key={varIndex} className="flex gap-1.5 items-baseline min-w-0">
-                          <span className="text-blue-600 shrink-0">{name}:</span>
-                          <span className="text-gray-700 truncate" title={value}>
+                        <div
+                          key={varIndex}
+                          className="flex gap-1.5 items-baseline min-w-0"
+                        >
+                          <span className="text-blue-600 shrink-0">
+                            {name}:
+                          </span>
+                          <span
+                            className="text-gray-700 truncate"
+                            title={value}
+                          >
                             {value}
                           </span>
                         </div>

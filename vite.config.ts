@@ -60,4 +60,7 @@ export default defineConfig({
   define: {
     "import.meta.vitest": "undefined",
   },
+  fmt: {
+    printWidth: 80,
+  },
 });

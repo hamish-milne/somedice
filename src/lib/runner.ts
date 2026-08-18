@@ -27,7 +27,9 @@ class RuntimeError extends BaseError {
   }
 }
 
-export function* runProgram(programText: string): Generator<OutputMessage, void, unknown> {
+export function* runProgram(
+  programText: string,
+): Generator<OutputMessage, void, unknown> {
   try {
     yield { type: "progress", opCount: 0, pcMax: 0, programSize: 1 };
     const program = parseProgram(programText);
@@ -58,10 +60,20 @@ export function* runProgram(programText: string): Generator<OutputMessage, void,
     yield { type: "result", outputs: state.outputs, opCount: state.opCount };
   } catch (e) {
     if (e instanceof BaseError) {
-      yield { type: "error", errorType: e.errorType(), message: e.message, debugInfo: e.debugInfo };
+      yield {
+        type: "error",
+        errorType: e.errorType(),
+        message: e.message,
+        debugInfo: e.debugInfo,
+      };
     } else {
       console.error(e);
-      yield { type: "error", errorType: "unknown", message: String(e), debugInfo: [] };
+      yield {
+        type: "error",
+        errorType: "unknown",
+        message: String(e),
+        debugInfo: [],
+      };
     }
   }
 }

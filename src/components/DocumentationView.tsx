@@ -8,7 +8,12 @@ function LinkTargetBlank(props: ComponentProps<"a">) {
 
 export function DocumentationView() {
   const store = useStore();
-  const isVisible = useWatch(store, "displayMode", (mode) => mode === "documentation", []);
+  const isVisible = useWatch(
+    store,
+    "displayMode",
+    (mode) => mode === "documentation",
+    [],
+  );
   return (
     <div
       className="px-3 py-4 sm:px-6 sm:py-8 max-w-4xl mx-auto prose prose-slate data-hidden:hidden"

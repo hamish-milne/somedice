@@ -92,8 +92,14 @@ const TOKEN_NAME_MAP = freeze(
   fromEntries(
     entries<number>(TOKEN)
       .map(([key, value]) => [value, key] as const)
-      .concat(Object.entries(TOKEN_KEYWORD_MAP).map(([key, value]) => [value, key] as const))
-      .concat(TOKEN_STRING_MAP.map(([token, str]) => [token, `'${str}'`] as const)),
+      .concat(
+        Object.entries(TOKEN_KEYWORD_MAP).map(
+          ([key, value]) => [value, key] as const,
+        ),
+      )
+      .concat(
+        TOKEN_STRING_MAP.map(([token, str]) => [token, `'${str}'`] as const),
+      ),
   ),
 );
 
@@ -136,7 +142,9 @@ function pushCode(state: ParserState, ...args: number[]): void {
 class SyntaxError extends BaseError {
   constructor(token: Token, context: string) {
     const [, value, location] = token;
-    super(`'${value}' was unexpected ${context}`, [{ location, variables: [], functionName: "" }]);
+    super(`'${value}' was unexpected ${context}`, [
+      { location, variables: [], functionName: "" },
+    ]);
   }
 
   override errorType() {
@@ -146,7 +154,9 @@ class SyntaxError extends BaseError {
 
 class CompilerError extends BaseError {
   constructor(state: ParserState, message: string) {
-    super(message, [{ location: state.location, variables: [], functionName: "" }]);
+    super(message, [
+      { location: state.location, variables: [], functionName: "" },
+    ]);
   }
 
   override errorType() {
@@ -185,7 +195,10 @@ function nextToken(state: ParserState): Token {
       break;
     }
   }
-  const location: Location = freeze([state.line, state.position - state.lineStart]);
+  const location: Location = freeze([
+    state.line,
+    state.position - state.lineStart,
+  ]);
   state.location = location;
   // Check for end of input
   if (state.position >= input.length) {
@@ -210,7 +223,10 @@ function nextToken(state: ParserState): Token {
       return [token, match[0], location];
     }
   }
-  throw new SyntaxError([-1, input[state.position], location], "because it's an invalid token");
+  throw new SyntaxError(
+    [-1, input[state.position], location],
+    "because it's an invalid token",
+  );
 }
 
 function backtrack(state: ParserState, token: Token): void {
@@ -221,7 +237,10 @@ function expectToken(state: ParserState, expectedToken: number): string {
   const token = nextToken(state);
   const [tokenType, value] = token;
   if (tokenType !== expectedToken) {
-    throw new SyntaxError(token, `because we expected ${TOKEN_NAME_MAP[expectedToken]}`);
+    throw new SyntaxError(
+      token,
+      `because we expected ${TOKEN_NAME_MAP[expectedToken]}`,
+    );
   }
   return value;
 }
@@ -323,7 +342,10 @@ function parseTerm(state: ParserState): void {
         const [paramToken, paramValue] = token;
         if (paramToken === TOKEN.RBRACKET) {
           if (args.length === 0) {
-            throw new SyntaxError(token, "because function calls must have at least one argument");
+            throw new SyntaxError(
+              token,
+              "because function calls must have at least one argument",
+            );
           }
           break;
         }
@@ -372,8 +394,15 @@ function parseTerm(state: ParserState): void {
   }
 }
 
-function pushOperator(state: ParserState, ops: [Operator, Location][], op: Operator): void {
-  while (ops.length > 0 && operatorPrecedence[ops[ops.length - 1][0]] <= operatorPrecedence[op]) {
+function pushOperator(
+  state: ParserState,
+  ops: [Operator, Location][],
+  op: Operator,
+): void {
+  while (
+    ops.length > 0 &&
+    operatorPrecedence[ops[ops.length - 1][0]] <= operatorPrecedence[op]
+  ) {
     const [op, location] = ops.pop()!;
     state.code.push(op);
     state.debugLocations.push(location);
@@ -387,7 +416,11 @@ function parseExpression(state: ParserState): void {
     while (true) {
       const token1 = nextToken(state);
       if (token1[0] in unaryTokens) {
-        pushOperator(state, ops, unaryTokens[token1[0] as keyof typeof unaryTokens]);
+        pushOperator(
+          state,
+          ops,
+          unaryTokens[token1[0] as keyof typeof unaryTokens],
+        );
       } else {
         backtrack(state, token1);
         break;
@@ -432,7 +465,11 @@ function parseAssignment(state: ParserState, value: string): void {
   storeVariable(state, value);
 }
 
-function branch(state: ParserState, opcode: number, inner: (state: ParserState) => void) {
+function branch(
+  state: ParserState,
+  opcode: number,
+  inner: (state: ParserState) => void,
+) {
   const { code } = state;
   pushCode(state, opcode, PLACEHOLDER);
   const jumpOffsetIndex = code.length - 1;
@@ -507,7 +544,10 @@ function parseFunction(state: ParserState) {
           break;
         case TOKEN.VARIABLE: {
           if (parameterNames.includes(paramValue)) {
-            throw new SyntaxError(token, "because function parameters must have unique names");
+            throw new SyntaxError(
+              token,
+              "because function parameters must have unique names",
+            );
           }
           parameterNames.push(paramValue);
           functionName.push(null);
@@ -552,7 +592,12 @@ function parseFunction(state: ParserState) {
     pushCode(state, OPCODE.SEQUENCE, 0, OPCODE.RETURN); // Ensure function always returns a value
     const functionNameStr = functionName.map((x) => x ?? "?").join(" ");
     pushDebugFrame(state, functionNameStr, loopStart, state.locals);
-    pushDebugFrame(state, functionNameStr + " (loop)", functionPtr, parameterNames);
+    pushDebugFrame(
+      state,
+      functionNameStr + " (loop)",
+      functionPtr,
+      parameterNames,
+    );
   });
   state.locals = undefined;
 }
@@ -563,7 +608,10 @@ function getOutputVariables(str: string): string[] {
 
 function parseOutput(state: ParserState) {
   if (state.locals) {
-    throw new CompilerError(state, "because output statements are not allowed inside functions");
+    throw new CompilerError(
+      state,
+      "because output statements are not allowed inside functions",
+    );
   }
   parseExpression(state);
   const token = nextToken(state);
@@ -573,7 +621,12 @@ function parseOutput(state: ParserState) {
     for (const variable of variables) {
       loadVar(state, variable);
     }
-    pushCode(state, OPCODE.OUTPUT_NAMED, variables.length, state.outputNames.length);
+    pushCode(
+      state,
+      OPCODE.OUTPUT_NAMED,
+      variables.length,
+      state.outputNames.length,
+    );
     state.outputNames.push(outputName);
   } else {
     backtrack(state, token);
@@ -665,7 +718,9 @@ if (import.meta.vitest) {
 
   describe("tokenizeOutputName", () => {
     it("should tokenize output names correctly", () => {
-      expect(getOutputVariables("foo [BAR][BAZ] bat [invalid thing] [")).toEqual(["BAR", "BAZ"]);
+      expect(
+        getOutputVariables("foo [BAR][BAZ] bat [invalid thing] ["),
+      ).toEqual(["BAR", "BAZ"]);
       expect(getOutputVariables("[FOO][BAR]")).toEqual(["FOO", "BAR"]);
       expect(getOutputVariables("no brackets")).toEqual([]);
       expect(getOutputVariables("[VALID][123]")).toEqual(["VALID"]);
@@ -864,7 +919,9 @@ if (import.meta.vitest) {
     });
 
     it("should throw a CompilerError for nested functions", () => {
-      expect(() => parseProgram("function: foo { function: bar {} }")).toThrow(CompilerError);
+      expect(() => parseProgram("function: foo { function: bar {} }")).toThrow(
+        CompilerError,
+      );
     });
 
     it("should throw a CompilerError for result outside function", () => {
@@ -872,7 +929,9 @@ if (import.meta.vitest) {
     });
 
     it("should throw a CompilerError for output inside function", () => {
-      expect(() => parseProgram("function: foo { output 5 }")).toThrow(CompilerError);
+      expect(() => parseProgram("function: foo { output 5 }")).toThrow(
+        CompilerError,
+      );
     });
 
     it("should throw a SyntaxError for duplicate function parameters", () => {
