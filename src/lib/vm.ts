@@ -59,9 +59,7 @@ export function valueToString(value: ProgramValue): string {
 
 function checkResult(value: number) {
   if (value > Number.MAX_SAFE_INTEGER || value < Number.MIN_SAFE_INTEGER) {
-    throw new Error(
-      `Math overflow: ${value} is outside the safe integer range`,
-    );
+    throw new Error(`Math overflow: ${value} is outside the safe integer range`);
   }
   return value;
 }
@@ -178,11 +176,7 @@ function valueToNumber(x: ProgramValue): number {
 }
 
 function valueToNumberOrDie(x: ProgramValue): number | Die {
-  return typeof x === "number"
-    ? x
-    : x.kind === KIND.SEQUENCE
-      ? sum(x)
-      : valueToDie(x);
+  return typeof x === "number" ? x : x.kind === KIND.SEQUENCE ? sum(x) : valueToDie(x);
 }
 
 function valueToCollection(x: Collection | Die): Collection {
@@ -220,18 +214,11 @@ function getAllSequences([n, d]: Collection): SequenceListItem[] {
 
   // Distributes `remaining` dice across faces [idx..k-1]; denom/pow accumulate
   // the multinomial denominator and the count^exponent product as we go.
-  function recurse(
-    idx: number,
-    remaining: number,
-    denom: number,
-    pow: number,
-  ): void {
+  function recurse(idx: number, remaining: number, denom: number, pow: number): void {
     if (idx === k - 1) {
       for (let j = 0; j < remaining; j++) seq.push(vals[idx]);
       const total =
-        (fact[n] / (denom * fact[remaining])) *
-        pow *
-        faceCounts[idx] ** remaining;
+        (fact[n] / (denom * fact[remaining])) * pow * faceCounts[idx] ** remaining;
       rCount += seq.length;
       if (rCount > MAX_ARRAY_LENGTH) {
         throw new Error(
@@ -343,12 +330,7 @@ function buildResult(results: readonly ResultItem[]): Die {
   return die(dieMapFinish(result));
 }
 
-function numberDieOperation(
-  op: number,
-  a: number,
-  b: Die,
-  reverse: boolean,
-): Die {
+function numberDieOperation(op: number, a: number, b: Die, reverse: boolean): Die {
   const resultMap = dieMap();
   for (const [value, count] of b) {
     const newValue = reverse
@@ -467,11 +449,7 @@ export function newState(program: Program): ProgramState {
   };
 }
 
-function binaryOperation(
-  a: number | Die,
-  b: number | Die,
-  opcode: number,
-): ProgramValue {
+function binaryOperation(a: number | Die, b: number | Die, opcode: number): ProgramValue {
   if (typeof a === "number" && typeof b === "number") {
     return numberOperation(opcode, a, b);
   } else if (typeof a === "number" && typeof b !== "number") {
@@ -485,11 +463,7 @@ function binaryOperation(
   }
 }
 
-function sequenceNumberOperation(
-  a: Sequence,
-  b: number,
-  opcode: number,
-): number {
+function sequenceNumberOperation(a: Sequence, b: number, opcode: number): number {
   let result = 0;
   for (const value of a) {
     result = checkResult(result + numberOperation(opcode, value, b));
@@ -497,11 +471,7 @@ function sequenceNumberOperation(
   return result;
 }
 
-function sequenceSequenceOperation(
-  a: Sequence,
-  b: Sequence,
-  opcode: number,
-): number {
+function sequenceSequenceOperation(a: Sequence, b: Sequence, opcode: number): number {
   const n = Math.min(a.length, b.length);
   let result = 0;
   for (let i = 0; i < n; i++) {
@@ -521,11 +491,7 @@ function compareOperation(
     } else if (b.kind === KIND.SEQUENCE) {
       return sequenceSequenceOperation(a, b, opcode);
     }
-  } else if (
-    typeof b !== "number" &&
-    b.kind === KIND.SEQUENCE &&
-    typeof a === "number"
-  ) {
+  } else if (typeof b !== "number" && b.kind === KIND.SEQUENCE && typeof a === "number") {
     return sequenceNumberOperation(b, a, opcode);
   }
   return binaryOperation(valueToNumberOrDie(a), valueToNumberOrDie(b), opcode);
@@ -697,10 +663,7 @@ export function execute(state: ProgramState, maxOps: number): boolean {
         const a = valueToNumber(pop(stack));
         const start = Math.min(a, b);
         const end = Math.max(a, b);
-        const seq = Array.from(
-          { length: end - start + 1 },
-          (_, i) => start + i,
-        );
+        const seq = Array.from({ length: end - start + 1 }, (_, i) => start + i);
         stack.push(sequence(seq));
         break;
       }
@@ -775,10 +738,7 @@ export function execute(state: ProgramState, maxOps: number): boolean {
             case KIND.SEQUENCE:
               if (typeof arg === "number") {
                 stack[fp + i] = sequence([arg]);
-              } else if (
-                arg.kind === KIND.COLLECTION ||
-                arg.kind === KIND.DIE
-              ) {
+              } else if (arg.kind === KIND.COLLECTION || arg.kind === KIND.DIE) {
                 const collection = valueToCollection(arg);
                 stack[fp + i] = sequenceList(getAllSequences(collection));
               } else {
@@ -806,8 +766,7 @@ export function execute(state: ProgramState, maxOps: number): boolean {
               const arg = stack[i];
               if (
                 typeof arg === "object" &&
-                (arg.kind === KIND.NUMBER_LIST ||
-                  arg.kind === KIND.SEQUENCE_LIST)
+                (arg.kind === KIND.NUMBER_LIST || arg.kind === KIND.SEQUENCE_LIST)
               ) {
                 stack[i] = arg[0][0];
               }
@@ -1036,6 +995,7 @@ if (import.meta.vitest) {
     FUNCTION_LOOP,
     CALL,
     RETURN,
+    SYSCALL,
   } = OPCODE;
 
   suite("opcodes", () => {
@@ -1186,10 +1146,7 @@ if (import.meta.vitest) {
     });
 
     test("SEQUENCE", () => {
-      runCode(
-        [IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, OUTPUT],
-        6,
-      );
+      runCode([IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, OUTPUT], 6);
       runCode([IMMEDIATE, 3, UNARY_D, SEQUENCE, 1, OUTPUT], 6);
     });
 
@@ -1199,10 +1156,7 @@ if (import.meta.vitest) {
     });
 
     test("LENGTH", () => {
-      runCode(
-        [IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, LENGTH, OUTPUT],
-        3,
-      );
+      runCode([IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, LENGTH, OUTPUT], 3);
       runCode([IMMEDIATE, 3, IMMEDIATE, 6, D, LENGTH, OUTPUT], 3);
     });
 
@@ -1300,37 +1254,11 @@ if (import.meta.vitest) {
 
     test("AT sequence", () => {
       runCode(
-        [
-          IMMEDIATE,
-          2,
-          IMMEDIATE,
-          1,
-          IMMEDIATE,
-          2,
-          IMMEDIATE,
-          3,
-          SEQUENCE,
-          3,
-          AT,
-          OUTPUT,
-        ],
+        [IMMEDIATE, 2, IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, AT, OUTPUT],
         2,
       );
       runCode(
-        [
-          IMMEDIATE,
-          4,
-          IMMEDIATE,
-          1,
-          IMMEDIATE,
-          2,
-          IMMEDIATE,
-          3,
-          SEQUENCE,
-          3,
-          AT,
-          OUTPUT,
-        ],
+        [IMMEDIATE, 4, IMMEDIATE, 1, IMMEDIATE, 2, IMMEDIATE, 3, SEQUENCE, 3, AT, OUTPUT],
         0,
       );
     });
@@ -1381,6 +1309,10 @@ if (import.meta.vitest) {
 
     test("L_STORE, L_LOAD", () => {
       runCode([RESERVE, 1, IMMEDIATE, 5, L_STORE, 0, L_LOAD, 0, OUTPUT], 5);
+    });
+
+    test("SYSCALL", () => {
+      runCode([IMMEDIATE, -5, SYSCALL, 1, 0, OUTPUT], 5);
     });
   });
 

@@ -3,7 +3,8 @@ Missing features:
   ✔ Sequence index sums all results @done(26-08-10 12:24)
   ✔ die-die operations @done(26-08-09 16:19)
   ✔ Sequence comparison @done(26-08-10 13:15)
-  ☐ Built-in functions
+  ✔ Built-in functions @done(26-08-19 16:28)
+  ☐ Multiple die pools (highest X and Y)
 Misc:
   ✔ Die -> DIE_SIMPLE, DIE_DISCRETE, and DIE_NORM @done(26-08-16 01:56)
   ✔ Encode argcount in OPCODE.CALL; in FUNCTION use fp to recover it @done(26-08-07 17:05)

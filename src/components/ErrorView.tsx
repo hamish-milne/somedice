@@ -26,8 +26,7 @@ export function ErrorView() {
   const errorLine = primaryLocation ? primaryLocation[0] : null;
   const errorColumn = primaryLocation ? primaryLocation[1] : null;
 
-  const snippetStart =
-    errorLine !== null ? Math.max(0, errorLine - ERROR_CONTEXT) : 0;
+  const snippetStart = errorLine !== null ? Math.max(0, errorLine - ERROR_CONTEXT) : 0;
   const snippetEnd =
     errorLine !== null
       ? Math.min(lines.length, errorLine + ERROR_CONTEXT + 1)
@@ -98,11 +97,7 @@ export function ErrorView() {
 
                     {/* Code Line */}
                     <div className="flex-1 px-3 py-0.5">
-                      <span
-                        className={
-                          isErrorLine ? "text-red-100" : "text-gray-300"
-                        }
-                      >
+                      <span className={isErrorLine ? "text-red-100" : "text-gray-300"}>
                         {line || " "}
                       </span>
                       {isErrorLine && errorColumn !== null && (
@@ -149,13 +144,8 @@ export function ErrorView() {
                           key={varIndex}
                           className="flex gap-1.5 items-baseline min-w-0"
                         >
-                          <span className="text-blue-600 shrink-0">
-                            {name}:
-                          </span>
-                          <span
-                            className="text-gray-700 truncate"
-                            title={value}
-                          >
+                          <span className="text-blue-600 shrink-0">{name}:</span>
+                          <span className="text-gray-700 truncate" title={value}>
                             {value}
                           </span>
                         </div>

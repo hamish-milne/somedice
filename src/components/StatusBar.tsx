@@ -5,12 +5,7 @@ import { useCallback } from "preact/hooks";
 export function StatusBar() {
   const store = useStore();
   const operationCount = useWatch(store, "opCount");
-  const isRunning = useWatch(
-    store,
-    "runState",
-    (state) => state === "running",
-    [],
-  );
+  const isRunning = useWatch(store, "runState", (state) => state === "running", []);
   const pcMax = useWatch(store, "pcMax");
   const programSize = useWatch(store, "programSize");
 

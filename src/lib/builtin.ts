@@ -1,4 +1,4 @@
-import { KIND } from "./common";
+import { KIND, OPCODE } from "./common";
 import {
   die,
   dieMap,
@@ -20,10 +20,10 @@ type ParamKindMap = {
   [KIND.ANY]: ProgramValue;
 };
 
-type ParamKind<
-  Params,
-  It extends readonly unknown[] = [],
-> = Params extends readonly [infer First, ...infer Rest]
+type ParamKind<Params, It extends readonly unknown[] = []> = Params extends readonly [
+  infer First,
+  ...infer Rest,
+]
   ? First extends keyof ParamKindMap
     ? ParamKind<Rest, [...It, ParamKindMap[First]]>
     : ParamKind<Rest, It>
@@ -64,14 +64,13 @@ function sysFunc<Params extends FunctionPattern>(
   };
 }
 
-function variadicFunc<
-  Params extends FunctionPattern,
-  Variadic extends FunctionPattern,
->(
+type TupleToArray<T> = T extends readonly [infer U] ? U[] : T;
+
+function variadicFunc<Params extends FunctionPattern, Variadic extends FunctionPattern>(
   params: Params,
   variadic: Variadic,
   func: (
-    ...args: [...ParamKind<Params>, ...ParamKind<Variadic>]
+    ...args: [...ParamKind<Params>, ...TupleToArray<ParamKind<Variadic>>]
   ) => ProgramValue,
 ): SysFunc {
   const paramKinds = params.filter((p) => typeof p === "number");
@@ -105,27 +104,19 @@ const builtins: SysFunc[] = [
   sysFunc([KIND.SEQUENCE, "contains", KIND.NUMBER] as const, (seq, num) => {
     return seq.includes(num) ? 1 : 0;
   }),
-  sysFunc(
-    ["count", KIND.SEQUENCE, "in", KIND.SEQUENCE] as const,
-    (seq1, seq2) => {
-      let count = 0;
-      for (const item of seq1) {
-        for (const item2 of seq2) {
-          if (item === item2) {
-            count++;
-          }
+  sysFunc(["count", KIND.SEQUENCE, "in", KIND.SEQUENCE] as const, (seq1, seq2) => {
+    let count = 0;
+    for (const item of seq1) {
+      for (const item2 of seq2) {
+        if (item === item2) {
+          count++;
         }
       }
-      return count;
-    },
-  ),
-  sysFunc(
-    ["maximum", "of", KIND.DIE] as const,
-    (die) => die[die.length - 1][0],
-  ),
-  sysFunc(["reverse", KIND.SEQUENCE] as const, (seq) =>
-    sequence([...seq].reverse()),
-  ),
+    }
+    return count;
+  }),
+  sysFunc(["maximum", "of", KIND.DIE] as const, (die) => die[die.length - 1][0]),
+  sysFunc(["reverse", KIND.SEQUENCE] as const, (seq) => sequence([...seq].reverse())),
   sysFunc(["sort", KIND.SEQUENCE] as const, (seq) =>
     sequence([...seq].sort((a, b) => a - b)),
   ),
@@ -165,4 +156,73 @@ const builtins: SysFunc[] = [
 
 export function sysCall(num: number, args: ProgramValue[]): ProgramValue {
   return builtins[num].func(...args);
+}
+
+export function matchSysCall(name: FunctionName): [number, readonly KIND[]] | undefined {
+  for (let i = 0; i < builtins.length; i++) {
+    const kinds = builtins[i].match(name);
+    if (kinds) {
+      return [i, kinds];
+    }
+  }
+  return undefined;
+}
+
+if (import.meta.vitest) {
+  const { describe, test, expect } = import.meta.vitest;
+  describe("sysCall", () => {
+    test("absolute", () => {
+      expect(sysCall(0, [-5])).toBe(5);
+    });
+
+    test("contains", () => {
+      expect(sysCall(1, [sequence([1, 2, 3]), 2])).toBe(1);
+      expect(sysCall(1, [sequence([1, 2, 3]), 4])).toBe(0);
+    });
+
+    test("count in", () => {
+      expect(sysCall(2, [sequence([1, 2, 3, 2]), sequence([2, 3])])).toBe(3);
+      expect(sysCall(2, [sequence([1, 2, 3]), sequence([4, 5])])).toBe(0);
+    });
+
+    test("maximum of", () => {
+      expect(
+        sysCall(3, [
+          die([
+            [1, 0.5],
+            [2, 0.5],
+          ]),
+        ]),
+      ).toBe(2);
+    });
+
+    test("reverse", () => {
+      expect(sysCall(4, [sequence([1, 2, 3])])).toEqual(sequence([3, 2, 1]));
+    });
+
+    test("sort", () => {
+      expect(sysCall(5, [sequence([3, 1, 2])])).toEqual(sequence([1, 2, 3]));
+    });
+
+    test("explode", () => {
+      const d = die([
+        [1, 0.5],
+        [2, 0.5],
+      ]);
+      const exploded = sysCall(6, [d]) as Die;
+      expect(exploded.slice(0, 3)).toEqual([
+        [1, 0.5],
+        [3, 0.25],
+        [5, 0.125],
+      ]);
+    });
+
+    test("highest of", () => {
+      expect(sysCall(7, [1, 3, 2])).toBe(3);
+    });
+
+    test("lowest of", () => {
+      expect(sysCall(8, [1, 3, 2])).toBe(1);
+    });
+  });
 }

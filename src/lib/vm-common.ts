@@ -20,10 +20,7 @@ export type Collection = readonly [count: number, die: Die] & {
 export type NumberList = readonly DieItem[] & {
   readonly kind: typeof KIND.NUMBER_LIST;
 };
-export type SequenceListItem = readonly [
-  sequence: Sequence,
-  probability: number,
-];
+export type SequenceListItem = readonly [sequence: Sequence, probability: number];
 export type SequenceList = readonly SequenceListItem[] & {
   readonly kind: typeof KIND.SEQUENCE_LIST;
 };
@@ -71,18 +68,12 @@ export function sequenceList(items: SequenceListItem[]): SequenceList {
 export function dieMap() {
   return new Map<number, number>();
 }
-export function dieMapAdd(
-  map: Map<number, number>,
-  value: number,
-  count: number,
-) {
+export function dieMapAdd(map: Map<number, number>, value: number, count: number) {
   map.set(value, (map.get(value) || 0) + count);
 }
 export const MIN_PROBABILITY = 1e-6;
 export function dieMapFinish(map: Map<number, number>): DieItem[] {
-  return arrayFrom(map.entries()).filter(
-    ([_, count]) => count > MIN_PROBABILITY,
-  );
+  return arrayFrom(map.entries()).filter(([_, count]) => count > MIN_PROBABILITY);
 }
 export function dNumber(d: number): Die {
   return die(arrayFrom({ length: d }, (_, i) => [i + 1, 1 / d]));

@@ -3,7 +3,9 @@ import tailwindcss from "@tailwindcss/vite";
 import mdx from "@mdx-js/rollup";
 import remarkGfm from "remark-gfm";
 import prefresh from "@prefresh/rolldown";
-import remarkGitHubAlerts, { type RemarkGitHubAlertsOptions } from "remark-github-markdown-alerts";
+import remarkGitHubAlerts, {
+  type RemarkGitHubAlertsOptions,
+} from "remark-github-markdown-alerts";
 import { readFileSync } from "node:fs";
 
 export default defineConfig({
@@ -61,6 +63,6 @@ export default defineConfig({
     "import.meta.vitest": "undefined",
   },
   fmt: {
-    printWidth: 80,
+    printWidth: 90,
   },
 });
