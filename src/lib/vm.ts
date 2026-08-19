@@ -944,7 +944,7 @@ if (import.meta.vitest) {
 
   function runCode(code: number[], expectedOutput: Die | number) {
     const program: Program = {
-      code,
+      code: new Int32Array(code),
       debugLocations: [],
       debugFrames: [],
       outputNames: [],
@@ -1431,7 +1431,7 @@ if (import.meta.vitest) {
       0,
     ];
     const program: Program = {
-      code,
+      code: new Int32Array(code),
       debugLocations: [],
       debugFrames: [],
       outputNames: ["Result [X]"],

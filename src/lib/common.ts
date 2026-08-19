@@ -77,7 +77,7 @@ export type DebugFrame = readonly [
 ];
 
 export type Program = {
-  code: number[];
+  code: Int32Array;
   outputNames: string[];
   debugLocations: Location[];
   debugFrames: readonly DebugFrame[];

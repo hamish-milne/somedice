@@ -333,9 +333,17 @@ function parseTerm(state: ParserState): void {
   const token = nextToken(state);
   const [tokenType, value] = token;
   switch (tokenType) {
-    case TOKEN.NUMBER:
-      pushCode(state, OPCODE.IMMEDIATE, parseInt(value, 10));
+    case TOKEN.NUMBER: {
+      const imm = parseInt(value, 10);
+      if (imm > 0x7fffffff) {
+        throw new SyntaxError(
+          token,
+          "because it is too large to fit in a 32-bit signed integer",
+        );
+      }
+      pushCode(state, OPCODE.IMMEDIATE, imm);
       break;
+    }
     case TOKEN.VARIABLE: {
       loadVar(state, value);
       break;
@@ -720,7 +728,7 @@ export function parseProgram(input: string): Program {
   state.code[1] = state.globals.length; // Update reserved space for global variables
   pushDebugFrame(state, "(globals)", 0, state.globals);
   return {
-    code: state.code,
+    code: new Int32Array(state.code),
     outputNames: state.outputNames,
     debugLocations: state.debugLocations,
     debugFrames: state.debugFrames,
@@ -746,7 +754,7 @@ if (import.meta.vitest) {
   describe("parseProgram", () => {
     it("should parse a simple program", () => {
       const program = parseProgram("X: 5 Y: 10 \\a comment\\ output X + Y");
-      expect(program.code).toEqual([
+      expect([...program.code]).toEqual([
         OPCODE.RESERVE,
         2,
         OPCODE.IMMEDIATE,
@@ -775,7 +783,7 @@ if (import.meta.vitest) {
         BAR: 3
         output [dfoo 5 4 3 2] named "Output [BAR]"
       `);
-      expect(program.code).toEqual([
+      expect([...program.code]).toEqual([
         OPCODE.RESERVE,
         1,
         OPCODE.JUMP,
@@ -824,7 +832,7 @@ if (import.meta.vitest) {
 
     it("should handle operator precedence correctly", () => {
       const program = parseProgram("output !2d(6+3)^2");
-      expect(program.code).toEqual([
+      expect([...program.code]).toEqual([
         OPCODE.RESERVE,
         0,
         OPCODE.IMMEDIATE,
@@ -850,7 +858,7 @@ if (import.meta.vitest) {
           output I
         }
       `);
-      expect(program.code).toEqual([
+      expect([...program.code]).toEqual([
         OPCODE.RESERVE,
         1,
         OPCODE.IMMEDIATE,
@@ -885,7 +893,7 @@ if (import.meta.vitest) {
           output 3
         }
       `);
-      expect(program.code).toEqual([
+      expect([...program.code]).toEqual([
         OPCODE.RESERVE,
         1,
         OPCODE.IMMEDIATE,
@@ -926,7 +934,7 @@ if (import.meta.vitest) {
 
   it("should parse syscalls correctly", () => {
     const program = parseProgram("output [highest of 3 and 5]");
-    expect(program.code).toEqual([
+    expect([...program.code]).toEqual([
       OPCODE.RESERVE,
       0,
       OPCODE.IMMEDIATE,
