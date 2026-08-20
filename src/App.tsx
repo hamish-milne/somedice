@@ -157,13 +157,14 @@ function Main() {
       <Header />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-0 overflow-hidden">
+      <div className="flex-1 flex flex-col horizontal:flex-row gap-0 overflow-hidden">
         {/* Left Panel: Code Editor */}
         <div
           className="flex-1 min-h-0 min-w-0 flex flex-col border-r border-gray-300 data-hidden:hidden"
           data-hidden={layout === "right" ? true : undefined}
         >
           <CodeEditor />
+          <StatusBar />
         </div>
 
         {/* Right Panel: Display Mode Selector and Chart */}
@@ -178,14 +179,6 @@ function Main() {
             <ChartArea />
           </div>
         </div>
-      </div>
-
-      {/* Status Bar */}
-      <div
-        className="contents not-lg:data-hidden:hidden"
-        data-hidden={layout === "right" ? true : undefined}
-      >
-        <StatusBar />
       </div>
     </div>
   );
