@@ -1,21 +1,34 @@
-import { patch, useStore, useWatch } from "tinystate";
+import { listen, patch, useStore, useWatch } from "tinystate";
 import { Button } from "./Button";
-import { useCallback } from "preact/hooks";
+import { useCallback, useEffect, useRef } from "preact/hooks";
 
 export function StatusBar() {
   const store = useStore();
   const operationCount = useWatch(store, "opCount");
   const isRunning = useWatch(store, "runState", (state) => state === "running", []);
-  const pcMax = useWatch(store, "pcMax");
-  const programSize = useWatch(store, "programSize");
 
   const onStart = useCallback(() => {
-    patch(store, { runState: "starting" });
+    patch(store, (state) => ({
+      runState: "starting" as const,
+      programCode: state.inputCode,
+    }));
   }, [store]);
 
   const onCancel = useCallback(() => {
     patch(store, { runState: "canceling" });
   }, [store]);
+
+  const progressRef = useRef<HTMLDivElement>(null);
+
+  useEffect(
+    () =>
+      listen(store, "progress", (progress) => {
+        if (progressRef.current) {
+          progressRef.current.style.setProperty("--progress", `${progress * 100}%`);
+        }
+      }),
+    [store],
+  );
 
   return (
     <div className="flex flex-row items-center gap-4 bg-white border-t border-gray-300 px-3 py-2 sm:px-6 sm:py-4 shadow-sm">
@@ -27,11 +40,12 @@ export function StatusBar() {
             Operations: {operationCount.toLocaleString()}
           </span>
         </div>
-        <progress
-          className="w-full h-2.5 appearance-none rounded-full overflow-hidden [&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-value]:bg-blue-600 [&::-moz-progress-bar]:bg-blue-600"
-          value={pcMax}
-          max={programSize}
-        />
+        <div className="w-full h-2.5 appearance-none rounded-full overflow-hidden bg-gray-200">
+          <div
+            ref={progressRef}
+            className="h-full transition-all w-(--progress) bg-blue-600"
+          />
+        </div>
       </div>
 
       {/* Control Buttons */}

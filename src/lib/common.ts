@@ -68,7 +68,7 @@ export const KIND = freeze({
 });
 export type KIND = ValueOf<typeof KIND>;
 
-export type Location = readonly [line: number, column: number];
+export type Location = readonly [line: number, column: number, position: number];
 export type DebugFrame = readonly [
   fromPc: number,
   toPc: number,

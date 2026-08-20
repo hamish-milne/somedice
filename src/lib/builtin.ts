@@ -1,4 +1,4 @@
-import { KIND, OPCODE } from "./common";
+import { KIND } from "./common";
 import {
   die,
   dieMap,

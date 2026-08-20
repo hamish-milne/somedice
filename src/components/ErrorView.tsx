@@ -1,4 +1,6 @@
-import { useStore, useWatch } from "tinystate";
+import type { TargetedMouseEvent } from "preact";
+import { useCallback } from "preact/hooks";
+import { peek, useStore, useWatch } from "tinystate";
 
 const ERROR_TITLES = {
   syntax: "Syntax Error",
@@ -11,14 +13,13 @@ const ERROR_CONTEXT = 2; // Number of lines of context to show around the error 
 
 export function ErrorView() {
   const store = useStore();
-  const inputCode = useWatch(store, "inputCode");
   const error = useWatch(store, "error");
   const displayMode = useWatch(store, "displayMode");
   const displayState = useWatch(store, "displayState");
   const isVisible = displayState === "error" && displayMode !== "documentation";
 
-  const { errorType, message, debugInfo } = error;
-  const lines = inputCode.split("\n");
+  const { errorType, message, debugInfo, code } = error;
+  const lines = code.split("\n");
   const title = ERROR_TITLES[errorType] || "Error";
 
   // Get the primary error location (most recent frame)
@@ -32,6 +33,19 @@ export function ErrorView() {
       ? Math.min(lines.length, errorLine + ERROR_CONTEXT + 1)
       : lines.length;
   const snippetLines = lines.slice(snippetStart, snippetEnd);
+
+  const locationOnClick = useCallback(
+    (e: TargetedMouseEvent<HTMLAnchorElement>) => {
+      const textarea = peek(store, "codeEditor");
+      const location = Number(e.currentTarget.dataset.location);
+      if (textarea && !Number.isNaN(location)) {
+        textarea.selectionStart = location;
+        textarea.selectionEnd = location;
+        textarea.focus();
+      }
+    },
+    [store],
+  );
 
   return (
     <div
@@ -74,7 +88,7 @@ export function ErrorView() {
             <div className="text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
               Code
             </div>
-            <div className="bg-gray-900 rounded overflow-hidden text-xs font-mono">
+            <div className="bg-gray-900 rounded overflow-hidden text-xs font-mono whitespace-pre">
               {snippetLines.map((line, index) => {
                 const lineNumber = snippetStart + index;
                 const isErrorLine = lineNumber === errorLine;
@@ -101,7 +115,7 @@ export function ErrorView() {
                         {line || " "}
                       </span>
                       {isErrorLine && errorColumn !== null && (
-                        <div className="text-red-400 whitespace-pre">
+                        <div className="text-red-400">
                           {" ".repeat(Math.max(0, errorColumn))}↑
                         </div>
                       )}
@@ -131,9 +145,14 @@ export function ErrorView() {
                     <span className="font-semibold text-gray-900">
                       {frame.functionName || "(global)"}
                     </span>
-                    <span className="text-gray-500 font-mono">
+                    <a
+                      className="text-gray-500 font-mono underline"
+                      href="#"
+                      data-location={frame.location[2]}
+                      onClick={locationOnClick}
+                    >
                       {frame.location[0] + 1}:{frame.location[1] + 1}
-                    </span>
+                    </a>
                   </div>
 
                   {/* Variables - Inline compact grid */}
@@ -145,9 +164,7 @@ export function ErrorView() {
                           className="flex gap-1.5 items-baseline min-w-0"
                         >
                           <span className="text-blue-600 shrink-0">{name}:</span>
-                          <span className="text-gray-700 truncate" title={value}>
-                            {value}
-                          </span>
+                          <span className="text-gray-700 truncate">{value}</span>
                         </div>
                       ))}
                     </div>

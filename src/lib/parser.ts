@@ -191,7 +191,17 @@ function nextToken(state: ParserState): Token {
       break;
     }
   }
-  const location: Location = freeze([state.line, state.position - state.lineStart]);
+  let nTabs = 0;
+  for (let i = state.lineStart; i < state.position; i++) {
+    if (input.charCodeAt(i) === 9) {
+      nTabs++;
+    }
+  }
+  const location: Location = freeze([
+    state.line,
+    state.position - state.lineStart + nTabs * 3, // Count tabs as 4 spaces
+    state.position,
+  ]);
   state.location = location;
   // Check for end of input
   if (state.position >= input.length) {
@@ -708,7 +718,7 @@ export function parseProgram(input: string): Program {
     position: 0,
     line: 0,
     lineStart: 0,
-    location: [0, 0],
+    location: [0, 0, 0],
     globals: [],
     locals: undefined,
     functions: [],

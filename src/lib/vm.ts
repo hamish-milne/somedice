@@ -52,7 +52,13 @@ export function valueToString(value: ProgramValue): string {
         .slice(0, MAX_STRING_ITEMS)
         .map(([v]) => `${valueToString(v)}`)
         .join(",")}${ellipsis}>`;
+    case KIND.SEQUENCE_LIST:
+      return `<${value
+        .slice(0, MAX_STRING_ITEMS)
+        .map(([v]) => valueToString(v))
+        .join(",")}${ellipsis}>`;
     default:
+      console.warn(`valueToString: unknown value ${value}`);
       return "<unknown>";
   }
 }

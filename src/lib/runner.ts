@@ -12,7 +12,11 @@ export type OutputMessage =
       message: string;
       debugInfo: DebugInfo[];
     }
-  | { type: "progress"; opCount: number; pcMax: number; programSize: number }
+  | {
+      type: "progress";
+      opCount: number;
+      progress: number;
+    }
   | { type: "result"; outputs: Output[]; opCount: number };
 
 const OPS_PER_PROGRESS_UPDATE = 100_000;
@@ -31,7 +35,7 @@ export function* runProgram(
   programText: string,
 ): Generator<OutputMessage, void, unknown> {
   try {
-    yield { type: "progress", opCount: 0, pcMax: 0, programSize: 1 };
+    yield { type: "progress", opCount: 0, progress: 0 };
     const program = parseProgram(programText);
     const state = newState(program);
 
@@ -40,8 +44,7 @@ export function* runProgram(
         yield {
           type: "progress",
           opCount: state.opCount,
-          pcMax: state.pcMax,
-          programSize: state.program.code.length,
+          progress: state.pcMax / state.program.code.length,
         };
       }
     } catch (e) {

@@ -17,6 +17,7 @@ import {
   useStore,
   useWatch,
   type AppStore,
+  type AtomOf,
 } from "tinystate";
 import { syncStorage } from "tinystate/utils";
 import type { InputMessage, OutputMessage } from "./lib/runner";
@@ -35,10 +36,11 @@ declare global {
       errorType: "syntax" | "compiler" | "runtime" | "unknown";
       message: string;
       debugInfo: DebugInfo[];
+      code: string;
     };
     opCount: number;
-    pcMax: number;
-    programSize: number;
+    progress: number;
+    codeEditor?: AtomOf<HTMLTextAreaElement>;
   }
 }
 
@@ -49,10 +51,9 @@ const initialState: AppState = {
   outputs: [],
   runState: "idle",
   displayState: "output",
-  error: { errorType: "unknown", message: "", debugInfo: [] },
+  error: { errorType: "unknown", message: "", debugInfo: [], code: "" },
   opCount: 0,
-  pcMax: 0,
-  programSize: 1,
+  progress: 0,
 };
 
 export default function App() {
@@ -82,6 +83,7 @@ function createRunnerWorker(store: AppStore) {
             errorType: msg.errorType,
             message: msg.message,
             debugInfo: msg.debugInfo,
+            code: peek(store, "inputCode"),
           },
         });
         break;
@@ -89,8 +91,7 @@ function createRunnerWorker(store: AppStore) {
         patch(store, {
           runState: "running",
           opCount: msg.opCount,
-          pcMax: msg.pcMax,
-          programSize: msg.programSize,
+          progress: msg.progress,
         });
         break;
       case "result":
@@ -98,7 +99,7 @@ function createRunnerWorker(store: AppStore) {
           runState: "idle",
           displayState: "output",
           outputs: msg.outputs,
-          pcMax: peek(store, "programSize"),
+          progress: 1,
           opCount: msg.opCount,
         });
         break;

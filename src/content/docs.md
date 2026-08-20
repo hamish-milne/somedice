@@ -123,6 +123,9 @@ The exception to this rule is the comparison operators. If you compare a sequenc
 
 If you compare two sequences, then each element of the first sequence is compared to the corresponding element of the second sequence, and the result is the number of elements that match the comparison. For example, `{1, 2, 3} > {0, 2, 4}` is equivalent to `1`, because only one element of the first sequence is greater than the corresponding element of the second sequence.
 
+> [!IMPORTANT]
+> Sequence-to-sequence comparisons are defined differently in AnyDice, which for greater-than/less-than returns 1 if _any_ element matches, and for equal/not-equal returns 1 if _all_ elements match. To check for an exact match in SomeDice, you can compare the result to the length of the sequence, like `(A > B) = #A`. To check for any match, you can compare the result to 0, like `(A > B) > 0`.
+
 ## Dice
 
 We have seen that the `d` operator is used to define dice, like `3d6`. However both sides of the operator can be a number, sequence, or another die.
@@ -211,4 +214,4 @@ output [calculate damage for d20 mod 5 against 15 with 2d6+3]
 ```
 
 > [!WARNING]
-> Iterating over a large dice pool can take a long time and use a lot of memory. SomeDice will throw an error if the number of unique sequences generated exceeds 500 million, but it is still possible to run out of memory and crash the browser tab. A good rule when iterating over a pool of `NdM` dice is to keep `N*M` below 100.
+> Iterating over a large dice pool can take a long time and use a lot of memory. SomeDice will throw an error if the number of unique sequences generated exceeds 1 billion, but it is still possible to run out of memory and crash the browser tab. A good rule when iterating over a pool of `NdM` dice is to keep `N*M` below 100.

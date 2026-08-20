@@ -1,15 +1,17 @@
 import { enableTabToIndent } from "indent-textarea";
-import { formText, useStore } from "tinystate";
+import { useCallback } from "preact/hooks";
+import { formText, patch, setAtom, useStore } from "tinystate";
 
 export function CodeEditor() {
   const store = useStore();
   const { ref, ...formTextProps } = formText(store, "inputCode");
-  const textareaRef = (el: HTMLTextAreaElement | null) => {
+  const textareaRefCallback = useCallback((el: HTMLTextAreaElement | null) => {
     ref(el);
     if (el) {
       enableTabToIndent(el);
+      patch(store, { codeEditor: setAtom(el) });
     }
-  };
+  }, []);
 
   return (
     <div className="h-full flex flex-col data-hidden:hidden">
@@ -24,9 +26,9 @@ export function CodeEditor() {
         autocapitalize="none"
         autocomplete="off"
         placeholder={"Enter your dice code here..."}
-        className="flex-1 p-2 sm:p-4 font-mono text-sm resize-none border border-gray-300 outline-0 focus:outline-2 focus:outline-blue-500"
+        className="flex-1 p-2 sm:p-4 font-mono text-sm resize-none border border-gray-300 focus:outline-blue-500"
         {...formTextProps}
-        ref={textareaRef}
+        ref={textareaRefCallback}
       />
     </div>
   );
